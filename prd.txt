@@ -1,0 +1,1037 @@
+Circle Stablecoin Integration with Bank-Backed Tokens via Pluggy API
+This implementation guide details how to deploy Circle's stablecoin-evm contracts as community currencies backed by Brazilian real (BRL) bank account balances verified through the Pluggy API. The system creates a transparent link between on-chain tokens and off-chain bank reserves, using WhatsApp as the primary user interface and login method.
+Architecture Overview
+The system uses Circle's battle-tested stablecoin contracts as the token implementation while replacing the USDC reserve model with real-time bank account verification through Pluggy API. Each deployed token represents Brazilian reals held in verified bank accounts, with the Pluggy API providing continuous proof of reserves. Users interact via WhatsApp for a seamless experience.
+Core Components
+
+Modified Circle Stablecoin Contracts - ERC20 tokens with minting controlled by bank balance verification
+Pluggy Oracle Contract - On-chain registry of verified bank balances 
+Backend Verification Service - Connects Pluggy API to blockchain
+Factory Contract - Deploys new tokens with minimal gas costs
+No-Code Launcher - Web interface for token deployment
+WhatsApp Service - Handles user interactions and authentication
+
+Technical Requirements
+Dependencies
+{
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.0",
+    "@pluggyapi/pluggy-sdk": "^2.0.0",
+    "ethers": "^6.7.0",
+    "hardhat": "^2.17.0",
+    "express": "^4.18.0",
+    "bull": "^4.11.0",
+    "node-cron": "^3.0.2",
+    "@privy-io/react-auth": "^1.0.0"
+  }
+}
+
+Environment Setup
+# Install dependencies
+npm install
+
+# Environment variables (.env)
+PLUGGY_CLIENT_ID=your_client_id
+PLUGGY_CLIENT_SECRET=your_client_secret
+PLUGGY_WEBHOOK_SECRET=your_webhook_secret
+RPC_ENDPOINT=https://rpc.ankr.com/celo
+PRIVATE_KEY=0x...
+ORACLE_UPDATE_KEY=0x...
+WHATSAPP_API_URL=https://api.whatsapp.com/v1
+WHATSAPP_API_KEY=your_whatsapp_key
+PRIVY_APP_ID=your_privy_app_id
+PRIVY_APP_SECRET=your_privy_secret
+DATABASE_URL=postgresql://user:password@localhost:5432/community_token
+REDIS_URL=redis://localhost:6379
+
+Smart Contract Implementation
+1. Bank Oracle Contract
+Manages bank balance verification:
+// contracts/BankOracle.sol
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract BankOracle is Ownable {
+    struct BankAccount {
+        string pluggyAccountId;
+        uint256 balanceBRL;
+        uint256 lastUpdated;
+        bool active;
+    }
+    
+    mapping(address => BankAccount) public tokenToAccount;
+    mapping(address => bool) public authorizedUpdaters;
+    
+    event BalanceUpdated(address indexed token, uint256 oldBalance, uint256 newBalance, uint256 timestamp);
+    event AccountLinked(address indexed token, string pluggyAccountId);
+    
+    modifier onlyUpdater() {
+        require(authorizedUpdaters[msg.sender], "Not authorized");
+        _;
+    }
+    
+    constructor() {
+        authorizedUpdaters[msg.sender] = true;
+    }
+    
+    function updateBalance(address token, string memory accountId, uint256 newBalanceBRL) external onlyUpdater {
+        BankAccount storage account = tokenToAccount[token];
+        require(account.active, "Account not active");
+        
+        uint256 oldBalance = account.balanceBRL;
+        account.balanceBRL = newBalanceBRL;
+        account.lastUpdated = block.timestamp;
+        
+        emit BalanceUpdated(token, oldBalance, newBalanceBRL, block.timestamp);
+    }
+    
+    function linkAccount(address token, string memory accountId) external onlyOwner {
+        tokenToAccount[token] = BankAccount({
+            pluggyAccountId: accountId,
+            balanceBRL: 0,
+            lastUpdated: 0,
+            active: true
+        });
+        emit AccountLinked(token, accountId);
+    }
+    
+    function getBalance(address token) external view returns (uint256) {
+        return tokenToAccount[token].balanceBRL;
+    }
+    
+    function authorizeUpdater(address updater, bool authorized) external onlyOwner {
+        authorizedUpdaters[updater] = authorized;
+    }
+}
+
+2. Modified FiatToken Contract
+Extends Circle's FiatTokenV2 with bank backing:
+// contracts/BankBackedToken.sol
+pragma solidity ^0.6.12;
+
+import "./FiatTokenV2.sol";
+
+contract BankBackedToken is FiatTokenV2 {
+    address public bankOracle;
+    
+    modifier hasBacking(uint256 amount) {
+        uint256 backing = IBankOracle(bankOracle).getBalance(address(this));
+        require(totalSupply() + amount <= backing, "Insufficient bank backing");
+        _;
+    }
+    
+    function initializeBankBacked(
+        string memory tokenName,
+        string memory tokenSymbol,
+        string memory tokenCurrency,
+        uint8 tokenDecimals,
+        address newMasterMinter,
+        address newPauser,
+        address newBlacklister,
+        address newOwner,
+        address _bankOracle
+    ) public {
+        initializeV2(tokenName, tokenSymbol, tokenCurrency, tokenDecimals);
+        _setMasterMinter(newMasterMinter);
+        _setPauser(newPauser);
+        _setBlacklister(newBlacklister);
+        _transferOwnership(newOwner);
+        bankOracle = _bankOracle;
+    }
+    
+    function mint(address _to, uint256 _amount) 
+        public 
+        override 
+        whenNotPaused 
+        onlyMinters 
+        hasBacking(_amount) 
+        returns (bool) 
+    {
+        return super.mint(_to, _amount);
+    }
+}
+
+interface IBankOracle {
+    function getBalance(address token) external view returns (uint256);
+}
+
+3. Token Factory Contract
+Deploys new bank-backed tokens:
+// contracts/TokenFactory.sol
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract TokenFactory is Ownable {
+    address public immutable tokenTemplate;
+    address public immutable bankOracle;
+    address public proxyAdmin;
+    
+    struct TokenDeployment {
+        address tokenAddress;
+        address proxyAddress;
+        string name;
+        string symbol;
+        address deployer;
+        uint256 deployedAt;
+    }
+    
+    TokenDeployment[] public deployments;
+    
+    event TokenDeployed(
+        address indexed token,
+        address indexed proxy,
+        address indexed deployer,
+        string name,
+        string symbol
+    );
+    
+    constructor(address _tokenTemplate, address _bankOracle, address _proxyAdmin) {
+        tokenTemplate = _tokenTemplate;
+        bankOracle = _bankOracle;
+        proxyAdmin = _proxyAdmin;
+    }
+    
+    function deployToken(
+        string memory name,
+        string memory symbol,
+        address masterMinter,
+        address pauser,
+        address blacklister,
+        address owner
+    ) external returns (address tokenProxy, address implementation) {
+        implementation = tokenTemplate.clone();
+        
+        bytes memory proxyInitCode = abi.encodePacked(
+            type(FiatTokenProxy).creationCode,
+            abi.encode(implementation)
+        );
+        
+        bytes32 salt = keccak256(abi.encodePacked(name, symbol, block.timestamp));
+        
+        assembly {
+            tokenProxy := create2(0, add(proxyInitCode, 0x20), mload(proxyInitCode), salt)
+        }
+        
+        IBankBackedToken(tokenProxy).initializeBankBacked(
+            name,
+            symbol,
+            "BRL",
+            2,
+            masterMinter,
+            pauser,
+            blacklister,
+            owner,
+            bankOracle
+        );
+        
+        IFiatTokenProxy(tokenProxy).changeAdmin(proxyAdmin);
+        
+        deployments.push(TokenDeployment({
+            tokenAddress: implementation,
+            proxyAddress: tokenProxy,
+            name: name,
+            symbol: symbol,
+            deployer: msg.sender,
+            deployedAt: block.timestamp
+        }));
+        
+        emit TokenDeployed(tokenProxy, implementation, msg.sender, name, symbol);
+        
+        return (tokenProxy, implementation);
+    }
+}
+
+interface IBankBackedToken {
+    function initializeBankBacked(
+        string memory tokenName,
+        string memory tokenSymbol,
+        string memory tokenCurrency,
+        uint8 tokenDecimals,
+        address newMasterMinter,
+        address newPauser,
+        address newBlacklister,
+        address newOwner,
+        address _bankOracle
+    ) external;
+}
+
+interface IFiatTokenProxy {
+    function changeAdmin(address newAdmin) external;
+}
+
+Backend Services
+1. Pluggy Integration Service
+Handles bank account verification:
+// services/pluggyService.js
+const { PluggyClient } = require('@pluggyapi/pluggy-sdk');
+const ethers = require('ethers');
+
+class PluggyBankService {
+    constructor() {
+        this.pluggy = new PluggyClient({
+            clientId: process.env.PLUGGY_CLIENT_ID,
+            clientSecret: process.env.PLUGGY_CLIENT_SECRET
+        });
+        
+        this.provider = new ethers.JsonRpcProvider(process.env.RPC_ENDPOINT);
+        this.oracle = new ethers.Contract(
+            process.env.ORACLE_ADDRESS,
+            require('./abis/BankOracle.json'),
+            new ethers.Wallet(process.env.ORACLE_UPDATE_KEY, this.provider)
+        );
+        
+        this.connections = new Map();
+    }
+    
+    async createConnection(tokenAddress) {
+        const connectToken = await this.pluggy.createConnectToken({
+            clientUserId: tokenAddress
+        });
+        
+        this.connections.set(tokenAddress, {
+            status: 'pending',
+            connectToken: connectToken.accessToken,
+            connectUrl: `https://connect.pluggy.ai?token=${connectToken.accessToken}`,
+            expiresAt: connectToken.expiresAt
+        });
+        
+        return {
+            connectUrl: this.connections.get(tokenAddress).connectUrl,
+            expiresAt: connectToken.expiresAt
+        };
+    }
+    
+    async handleWebhook(event) {
+        switch (event.type) {
+            case 'CONNECTION_SUCCESS':
+                await this.onConnectionSuccess(event.itemId);
+                break;
+            case 'ACCOUNTS_UPDATED':
+                await this.updateBalances(event.itemId);
+                break;
+        }
+    }
+    
+    async onConnectionSuccess(itemId) {
+        const accounts = await this.pluggy.fetchAccounts(itemId);
+        const account = accounts.find(a => a.type === 'CHECKING') || accounts[0];
+        
+        if (!account) {
+            throw new Error('No suitable account found');
+        }
+        
+        const tokenAddress = Array.from(this.connections.keys()).find(
+            key => this.connections.get(key).connectToken === itemId
+        );
+        
+        if (tokenAddress) {
+            this.connections.set(tokenAddress, {
+                ...this.connections.get(tokenAddress),
+                status: 'connected',
+                accountId: account.id,
+                itemId
+            });
+            
+            const balanceCentavos = Math.floor(account.balance * 100);
+            
+            const tx = await this.oracle.updateBalance(
+                tokenAddress,
+                account.id,
+                balanceCentavos
+            );
+            await tx.wait();
+            
+            // Link account to token
+            const linkTx = await this.oracle.linkAccount(tokenAddress, account.id);
+            await linkTx.wait();
+        }
+    }
+    
+    async updateBalances(itemId) {
+        const accounts = await this.pluggy.fetchAccounts(itemId);
+        const tokenAddress = Array.from(this.connections.keys()).find(
+            key => this.connections.get(key).itemId === itemId
+        );
+        
+        if (tokenAddress) {
+            const account = accounts.find(
+                a => a.id === this.connections.get(tokenAddress).accountId
+            );
+            if (account) {
+                const balanceCentavos = Math.floor(account.balance * 100);
+                const tx = await this.oracle.updateBalance(
+                    tokenAddress,
+                    account.id,
+                    balanceCentavos
+                );
+                await tx.wait();
+            }
+        }
+    }
+    
+    startBalanceUpdates() {
+        setInterval(async () => {
+            for (const [tokenAddress, connection] of this.connections) {
+                if (connection.status === 'connected') {
+                    await this.updateBalances(connection.itemId);
+                }
+            }
+        }, 600000); // 10 minutes
+    }
+    
+    isHealthy() {
+        return !!this.pluggy && !!this.oracle;
+    }
+}
+
+module.exports = PluggyBankService;
+
+2. WhatsApp Service with Privy Authentication
+Handles user interactions via WhatsApp:
+// services/whatsappService.js
+const axios = require('axios');
+const EventEmitter = require('events');
+const Redis = require('ioredis');
+const { Pool } = require('pg');
+
+class WhatsAppService extends EventEmitter {
+    constructor() {
+        super();
+        this.redis = new Redis(process.env.REDIS_URL);
+        this.db = new Pool({ connectionString: process.env.DATABASE_URL });
+        this.sessions = new Map();
+    }
+    
+    async handleWhatsApp(sessionId, phoneNumber, text) {
+        phoneNumber = this.normalizePhoneNumber(phoneNumber);
+        
+        let session = await this.redis.get(`session:${sessionId}`);
+        if (!session) {
+            session = {
+                state: 'MENU',
+                phoneNumber,
+                createdAt: Date.now()
+            };
+            await this.redis.set(`session:${sessionId}`, JSON.stringify(session), 'EX', 3600);
+        } else {
+            session = JSON.parse(session);
+        }
+        
+        let response;
+        switch (session.state) {
+            case 'MENU':
+                response = this.showMainMenu();
+                session.state = 'AWAITING_INPUT';
+                break;
+                
+            case 'AWAITING_INPUT':
+                response = await this.processMenuInput(text, session);
+                break;
+                
+            case 'AWAITING_AMOUNT':
+                response = await this.processAmountInput(text, session);
+                break;
+                
+            case 'AWAITING_RECIPIENT':
+                response = await this.processRecipientInput(text, session);
+                break;
+                
+            default:
+                response = 'Erro: Estado inválido. Digite *123# para voltar ao menu.';
+                session.state = 'MENU';
+        }
+        
+        await this.redis.set(`session:${sessionId}`, JSON.stringify(session), 'EX', 3600);
+        
+        return this.formatResponse('CONTINUE', response);
+    }
+    
+    showMainMenu() {
+        return `Bem-vindo ao Token Comunitário!
+1. Ver saldo
+2. Enviar dinheiro
+3. Ver últimas transações
+4. Cadastrar
+Digite o número da opção desejada`;
+    }
+    
+    async processMenuInput(input, session) {
+        switch (input.trim()) {
+            case '1':
+                return await this.checkBalance(session.phoneNumber);
+                
+            case '2':
+                session.state = 'AWAITING_RECIPIENT';
+                return 'Digite o número de telefone do destinatário (ex: +5511987654321)';
+                
+            case '3':
+                return await this.getRecentHistory(session.phoneNumber);
+                
+            case '4':
+                const privyResponse = await this.initiatePrivyAuth(session.phoneNumber);
+                session.state = 'AWAITING_AUTH';
+                session.authToken = privyResponse.authToken;
+                return `Por favor, verifique seu WhatsApp para confirmar o login.`;
+                
+            default:
+                return 'Opção inválida. Digite 1, 2, 3 ou 4.';
+        }
+    }
+    
+    async processRecipientInput(input, session) {
+        session.recipient = this.normalizePhoneNumber(input);
+        session.state = 'AWAITING_AMOUNT';
+        return 'Digite o valor a enviar (ex: 10.50 para R$10,50)';
+    }
+    
+    async processAmountInput(input, session) {
+        const amount = parseFloat(input);
+        if (isNaN(amount) || amount <= 0) {
+            return 'Valor inválido. Digite um valor válido (ex: 10.50)';
+        }
+        
+        try {
+            const tx = await this.sendMoney(session.phoneNumber, session.recipient, amount);
+            session.state = 'MENU';
+            return `Transferência enviada! Hash: ${tx.txHash}\nDigite *123# para voltar ao menu.`;
+        } catch (error) {
+            return `Erro: ${error.message}\nDigite *123# para voltar ao menu.`;
+        }
+    }
+    
+    async initiatePrivyAuth(phoneNumber) {
+        // Simulate Privy phone authentication via WhatsApp
+        // In production, integrate with Privy's phone auth API
+        const authToken = `auth_${Math.random().toString(36).slice(2)}`;
+        await this.redis.set(`auth:${phoneNumber}`, authToken, 'EX', 300);
+        
+        // Send WhatsApp message with verification link
+        await axios.post(
+            `${process.env.WHATSAPP_API_URL}/messages`,
+            {
+                to: phoneNumber,
+                type: 'text',
+                text: {
+                    body: `Verifique sua identidade: https://auth.yourdomain.com/verify?token=${authToken}`
+                }
+            },
+            {
+                headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_API_KEY}` }
+            }
+        );
+        
+        return { authToken };
+    }
+    
+    async verifyAuthToken(phoneNumber, token) {
+        const storedToken = await this.redis.get(`auth:${phoneNumber}`);
+        if (storedToken !== token) {
+            throw new Error('Invalid auth token');
+        }
+        
+        // Create or get wallet
+        const wallet = await this.registerUser(phoneNumber);
+        
+        // Clean up
+        await this.redis.del(`auth:${phoneNumber}`);
+        
+        return wallet;
+    }
+    
+    formatResponse(type, message) {
+        return JSON.stringify({
+            sessionEnd: type === 'END',
+            message
+        });
+    }
+    
+    normalizePhoneNumber(phone) {
+        phone = phone.replace(/\D/g, '');
+        if (phone.length === 10 || phone.length === 11) {
+            phone = '55' + phone;
+        }
+        if (!phone.startsWith('+')) {
+            phone = '+' + phone;
+        }
+        return phone;
+    }
+    
+    async registerUser(phoneNumber) {
+        // In production, integrate with Privy for wallet creation
+        const wallet = {
+            userId: `user_${phoneNumber}`,
+            address: `0x${Math.random().toString(16).slice(2, 42)}`
+        };
+        
+        await this.db.query(
+            'INSERT INTO users (privy_user_id, phone_number) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [wallet.userId, phoneNumber]
+        );
+        
+        await this.db.query(
+            'INSERT INTO wallets (user_id, address, auth_method, auth_value, phone) VALUES ($1, $2, $3, $4, $5)',
+            [wallet.userId, wallet.address, 'phone', phoneNumber, phoneNumber]
+        );
+        
+        return wallet;
+    }
+    
+    async sendMoney(fromPhone, toPhone, amount) {
+        const fromWallet = await this.getWalletByPhone(fromPhone);
+        const toWallet = await this.getWalletByPhone(toPhone);
+        
+        if (!fromWallet) throw new Error('Remetente não cadastrado');
+        if (!toWallet) throw new Error('Destinatário não cadastrado');
+        
+        // Simulate transaction (replace with actual blockchain call)
+        return {
+            txHash: `0x${Math.random().toString(16).slice(2, 66)}`,
+            from: fromWallet.address,
+            to: toWallet.address,
+            amount: Math.floor(amount * 100)
+        };
+    }
+    
+    async checkBalance(phoneNumber) {
+        const wallet = await this.getWalletByPhone(phoneNumber);
+        if (!wallet) {
+            return 'Você não está cadastrado. Digite 4 para cadastrar.';
+        }
+        
+        // Simulate balance check
+        return `Saldo: R$ 100.00\nCarteira: ${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`;
+    }
+    
+    async getRecentHistory(phoneNumber) {
+        const wallet = await this.getWalletByPhone(phoneNumber);
+        if (!wallet) {
+            return 'Você não está cadastrado.';
+        }
+        
+        return 'Sem transações recentes';
+    }
+    
+    async getWalletByPhone(phoneNumber) {
+        const result = await this.db.query(
+            'SELECT * FROM wallets WHERE phone = $1 LIMIT 1',
+            [phoneNumber]
+        );
+        return result.rows[0];
+    }
+    
+    isHealthy() {
+        return !!this.redis && !!this.db;
+    }
+}
+
+module.exports = WhatsAppService;
+
+3. Token Deployment Service
+// services/tokenDeployer.js
+const ethers = require('ethers');
+const fs = require('fs');
+
+class TokenDeployer {
+    constructor() {
+        this.provider = new ethers.JsonRpcProvider(process.env.RPC_ENDPOINT);
+        this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
+        
+        const factoryABI = JSON.parse(
+            fs.readFileSync('./artifacts/contracts/TokenFactory.sol/TokenFactory.json')
+        ).abi;
+        
+        this.factory = new ethers.Contract(
+            process.env.FACTORY_ADDRESS,
+            factoryABI,
+            this.wallet
+        );
+    }
+    
+    async deployToken(name, symbol, masterMinter, pauser, blacklister, owner) {
+        const gasEstimate = await this.factory.deployToken.estimateGas(
+            name,
+            symbol,
+            masterMinter,
+            pauser,
+            blacklister,
+            owner
+        );
+        
+        const gasLimit = gasEstimate * 110n / 100n;
+        
+        const tx = await this.factory.deployToken(
+            name,
+            symbol,
+            masterMinter,
+            pauser,
+            blacklister,
+            owner,
+            { gasLimit }
+        );
+        
+        const receipt = await tx.wait();
+        const event = receipt.logs.find(
+            log => log.fragment?.name === 'TokenDeployed'
+        );
+        
+        return {
+            proxy: event.args.token,
+            implementation: event.args.proxy,
+            txHash: receipt.hash,
+            gasUsed: receipt.gasUsed.toString()
+        };
+    }
+}
+
+Frontend Implementation
+1. React Launcher Component
+// components/TokenLauncher.jsx
+import { useState } from 'react';
+import { useAccount, useContractWrite } from 'wagmi';
+import axios from 'axios';
+
+const TokenLauncher = () => {
+    const { address } = useAccount();
+    const [tokenData, setTokenData] = useState({
+        name: '',
+        symbol: '',
+        masterMinter: '',
+        pauser: '',
+        blacklister: '',
+        owner: ''
+    });
+    const [deploymentResult, setDeploymentResult] = useState(null);
+    const [pluggyUrl, setPluggyUrl] = useState('');
+    
+    const deployToken = async () => {
+        try {
+            const response = await axios.post('/api/deploy-token', {
+                ...tokenData,
+                masterMinter: tokenData.masterMinter || address,
+                pauser: tokenData.pauser || address,
+                blacklister: tokenData.blacklister || address,
+                owner: tokenData.owner || address
+            });
+            
+            setDeploymentResult(response.data);
+            
+            const connection = await axios.post(`/api/connect-bank/${response.data.proxy}`);
+            setPluggyUrl(connection.data.connectUrl);
+        } catch (error) {
+            console.error('Deployment failed:', error);
+        }
+    };
+    
+    return (
+        <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
+            <h2 className="text-2xl font-bold mb-6">Launch Community Token</h2>
+            
+            <div className="space-y-4">
+                <input
+                    type="text"
+                    placeholder="Token Name"
+                    value={tokenData.name}
+                    onChange={(e) => setTokenData({...tokenData, name: e.target.value})}
+                    className="w-full p-2 border rounded"
+                />
+                <input
+                    type="text"
+                    placeholder="Token Symbol"
+                    value={tokenData.symbol}
+                    onChange={(e) => setTokenData({...tokenData, symbol: e.target.value})}
+                    className="w-full p-2 border rounded"
+                />
+                <button
+                    onClick={deployToken}
+                    className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700"
+                >
+                    Deploy Token
+                </button>
+                
+                {deploymentResult && (
+                    <div className="mt-4 p-4 bg-gray-100 rounded">
+                        <p>Token Deployed: {deploymentResult.proxy}</p>
+                        <p>Transaction: {deploymentResult.txHash}</p>
+                        {pluggyUrl && (
+                            <a href={pluggyUrl} className="text-blue-600">
+                                Connect Bank Account
+                            </a>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default TokenLauncher;
+
+API Server
+// server.js
+const express = require('express');
+const cors = require('cors');
+const Bull = require('bull');
+const WhatsAppService = require('./services/whatsappService');
+const PluggyBankService = require('./services/pluggyService');
+const TokenDeployer = require('./services/tokenDeployer');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const whatsappService = new WhatsAppService();
+const pluggyService = new PluggyBankService();
+const tokenDeployer = new TokenDeployer();
+
+const deploymentQueue = new Bull('token-deployment', {
+    redis: { port: 6379, host: 'localhost' }
+});
+
+app.post('/api/deploy-token', async (req, res) => {
+    try {
+        const { name, symbol, masterMinter, pauser, blacklister, owner } = req.body;
+        
+        const job = await deploymentQueue.add('deploy', {
+            name, symbol, masterMinter, pauser, blacklister, owner
+        });
+        
+        res.json({ success: true, jobId: job.id });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+deploymentQueue.process('deploy', async (job) => {
+    const { name, symbol, masterMinter, pauser, blacklister, owner } = job.data;
+    
+    const result = await tokenDeployer.deployToken(
+        name, symbol, masterMinter, pauser, blacklister, owner
+    );
+    
+    return result;
+});
+
+app.post('/api/connect-bank/:tokenAddress', async (req, res) => {
+    try {
+        const { tokenAddress } = req.params;
+        const connection = await pluggyService.createConnection(tokenAddress);
+        
+        res.json({
+            success: true,
+            connectUrl: connection.connectUrl,
+            expiresAt: connection.expiresAt
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/whatsapp', async (req, res) => {
+    try {
+        const { sessionId, phoneNumber, text } = req.body;
+        const response = await whatsappService.handleWhatsApp(sessionId, phoneNumber, text);
+        res.json(JSON.parse(response));
+    } catch (error) {
+        res.status(500).json({ 
+            sessionEnd: true, 
+            message: 'Erro no sistema' 
+        });
+    }
+});
+
+app.post('/api/auth/verify', async (req, res) => {
+    try {
+        const { phoneNumber, token } = req.body;
+        const wallet = await whatsappService.verifyAuthToken(phoneNumber, token);
+        
+        res.json({
+            success: true,
+            userId: wallet.userId,
+            address: wallet.address
+        });
+    } catch (error) {
+        res.status(401).json({ error: 'Authentication failed' });
+    }
+});
+
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        services: {
+            whatsapp: whatsappService.isHealthy(),
+            pluggy: pluggyService.isHealthy()
+        }
+    });
+});
+
+pluggyService.startBalanceUpdates();
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+
+Deployment and Configuration
+Environment Variables
+# .env file
+RPC_ENDPOINT=https://rpc.ankr.com/celo
+PRIVATE_KEY=0x...
+ORACLE_UPDATE_KEY=0x...
+WHATSAPP_API_URL=https://api.whatsapp.com/v1
+WHATSAPP_API_KEY=your_whatsapp_key
+PLUGGY_CLIENT_ID=your_client_id
+PLUGGY_CLIENT_SECRET=your_client_secret
+PLUGGY_WEBHOOK_SECRET=your_webhook_secret
+PRIVY_APP_ID=your_privy_app_id
+PRIVY_APP_SECRET=your_privy_secret
+DATABASE_URL=postgresql://user:password@localhost:5432/community_token
+REDIS_URL=redis://localhost:6379
+ORACLE_ADDRESS=0x...
+FACTORY_ADDRESS=0x...
+
+Deployment Script
+// scripts/deploy.js
+const hre = require("hardhat");
+const fs = require("fs");
+
+async function main() {
+    const [deployer] = await hre.ethers.getSigners();
+    console.log("Deploying with:", deployer.address);
+    
+    // Deploy Bank Oracle
+    const BankOracle = await hre.ethers.getContractFactory("BankOracle");
+    const oracle = await BankOracle.deploy();
+    await oracle.waitForDeployment();
+    console.log("BankOracle deployed to:", await oracle.getAddress());
+    
+    // Deploy Token Template
+    const BankBackedToken = await hre.ethers.getContractFactory("BankBackedToken");
+    const template = await BankBackedToken.deploy();
+    await template.waitForDeployment();
+    console.log("Token template deployed to:", await template.getAddress());
+    
+    // Deploy Factory
+    const TokenFactory = await hre.ethers.getContractFactory("TokenFactory");
+    const factory = await TokenFactory.deploy(
+        await template.getAddress(),
+        await oracle.getAddress(),
+        deployer.address
+    );
+    await factory.waitForDeployment();
+    console.log("TokenFactory deployed to:", await factory.getAddress());
+    
+    // Save addresses
+    const addresses = {
+        oracle: await oracle.getAddress(),
+        template: await template.getAddress(),
+        factory: await factory.getAddress(),
+        deployedAt: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(
+        './deployments/contracts.json',
+        JSON.stringify(addresses, null, 2)
+    );
+}
+
+main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error);
+        process.exit(1);
+    });
+
+Database Schema
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    privy_user_id VARCHAR(100) UNIQUE NOT NULL,
+    phone_number VARCHAR(20) UNIQUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_login TIMESTAMP
+);
+
+CREATE TABLE wallets (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(100) NOT NULL,
+    address VARCHAR(42) UNIQUE NOT NULL,
+    auth_method VARCHAR(20) NOT NULL,
+    auth_value VARCHAR(255),
+    phone VARCHAR(20),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE deployed_tokens (
+    id SERIAL PRIMARY KEY,
+    address VARCHAR(42) UNIQUE NOT NULL,
+    name VARCHAR(100),
+    symbol VARCHAR(10),
+    decimals INT DEFAULT 2,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE bank_connections (
+    id SERIAL PRIMARY KEY,
+    token_address VARCHAR(42) NOT NULL,
+    pluggy_item_id VARCHAR(100),
+    pluggy_account_id VARCHAR(100),
+    bank_name VARCHAR(100),
+    balance_brl BIGINT,
+    last_updated TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE whatsapp_sessions (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(100) UNIQUE NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    state JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_wallets_phone ON wallets(phone);
+CREATE INDEX idx_wallets_user_id ON wallets(user_id);
+CREATE INDEX idx_whatsapp_phone ON whatsapp_sessions(phone_number);
+
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_whatsapp_sessions_updated_at
+BEFORE UPDATE ON whatsapp_sessions
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at();
+
+Deployment Checklist
+
+ Audit smart contracts
+ Set up WhatsApp Business API
+ Configure Pluggy API credentials
+ Set up Privy for phone authentication
+ Deploy PostgreSQL and Redis
+ Configure production RPC endpoint
+ Deploy contracts (Oracle, Template, Factory)
+ Set up monitoring (e.g., Datadog)
+ Configure SSL certificates
+ Test WhatsApp flows
+ Verify bank balance synchronization
+ Test user authentication flow
+
+Security Considerations
+
+Private Key Management: Use HSM or key management services
+Rate Limiting: Implement on API endpoints
+WhatsApp Session Security: Use timeouts and encryption
+Phone Verification: Implement OTP via WhatsApp
+Multi-sig Wallets: Use for admin functions
+Circuit Breakers: Implement for anomaly detection
+
+This implementation provides a bank-backed token system with WhatsApp-based user interaction and phone-only authentication, ensuring accessibility and security.

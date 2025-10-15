@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pluggy Community Currency</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [tokens, setTokens] = useState([]);
+            const [loading, setLoading] = useState(false);
+
+            return (
+                <div className="min-h-screen bg-gray-100">
+                    {/* Header */}
+                    <header className="bg-white shadow-sm border-b">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between items-center py-4">
+                                <div className="flex items-center">
+                                    <div className="text-2xl mr-3">🔗</div>
+                                    <h1 className="text-xl font-bold text-gray-900">Pluggy Community Currency</h1>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                    <div className="flex items-center text-sm text-green-600">
+                                        <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                        System Online
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Navigation */}
+                    <nav className="bg-white shadow-sm">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex space-x-8">
+                                <button
+                                    onClick={() => setActiveTab('dashboard')}
+                                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                                        activeTab === 'dashboard'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    }`}
+                                >
+                                    Dashboard
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('deploy')}
+                                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                                        activeTab === 'deploy'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    }`}
+                                >
+                                    Deploy Token
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('tokens')}
+                                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                                        activeTab === 'tokens'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    }`}
+                                >
+                                    My Tokens
+                                </button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    {/* Main Content */}
+                    <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+                        {activeTab === 'dashboard' && <Dashboard />}
+                        {activeTab === 'deploy' && <DeployToken />}
+                        {activeTab === 'tokens' && <MyTokens tokens={tokens} setTokens={setTokens} />}
+                    </main>
+                </div>
+            );
+        }
+
+        function Dashboard() {
+            const [health, setHealth] = useState(null);
+
+            useEffect(() => {
+                checkHealth();
+            }, []);
+
+            const checkHealth = async () => {
+                try {
+                    const response = await axios.get('/health');
+                    setHealth(response.data);
+                } catch (error) {
+                    console.error('Health check failed:', error);
+                }
+            };
+
+            return (
+                <div className="px-4 py-6 sm:px-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* System Status Card */}
+                        <div className="bg-white overflow-hidden shadow rounded-lg">
+                            <div className="p-5">
+                                <div className="flex items-center">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                            <span className="text-white text-sm">✓</span>
+                                        </div>
+                                    </div>
+                                    <div className="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt className="text-sm font-medium text-gray-500 truncate">System Status</dt>
+                                            <dd className="text-lg font-medium text-gray-900">Online</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Database Status Card */}
+                        <div className="bg-white overflow-hidden shadow rounded-lg">
+                            <div className="p-5">
+                                <div className="flex items-center">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                                            <span className="text-white text-sm">🗄️</span>
+                                        </div>
+                                    </div>
+                                    <div className="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt className="text-sm font-medium text-gray-500 truncate">Database</dt>
+                                            <dd className="text-lg font-medium text-gray-900">Connected</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* WhatsApp Status Card */}
+                        <div className="bg-white overflow-hidden shadow rounded-lg">
+                            <div className="p-5">
+                                <div className="flex items-center">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                            <span className="text-white text-sm">💬</span>
+                                        </div>
+                                    </div>
+                                    <div className="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt className="text-sm font-medium text-gray-500 truncate">WhatsApp Service</dt>
+                                            <dd className="text-lg font-medium text-gray-900">
+                                                {health?.services?.whatsapp ? 'Active' : 'Inactive'}
+                                            </dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Features Overview */}
+                    <div className="mt-8 bg-white shadow rounded-lg">
+                        <div className="px-4 py-5 sm:p-6">
+                            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">System Features</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h4 className="text-md font-medium text-gray-900 mb-2">🏦 Bank-Backed Tokens</h4>
+                                    <p className="text-sm text-gray-600">ERC20 tokens backed by verified Brazilian real bank balances</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-md font-medium text-gray-900 mb-2">📱 WhatsApp Integration</h4>
+                                    <p className="text-sm text-gray-600">Phone-only authentication and seamless mobile transactions</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-md font-medium text-gray-900 mb-2">🔗 Pluggy API</h4>
+                                    <p className="text-sm text-gray-600">Real-time bank account verification and balance synchronization</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-md font-medium text-gray-900 mb-2">🏭 Token Factory</h4>
+                                    <p className="text-sm text-gray-600">Gas-efficient deployment of community currencies</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function DeployToken() {
+            const [formData, setFormData] = useState({
+                name: '',
+                symbol: '',
+                masterMinter: '',
+                pauser: '',
+                blacklister: '',
+                owner: ''
+            });
+            const [loading, setLoading] = useState(false);
+            const [result, setResult] = useState(null);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+
+                try {
+                    const response = await axios.post('/api/deploy-token', formData);
+                    setResult({ success: true, data: response.data });
+                } catch (error) {
+                    setResult({ success: false, error: error.response?.data?.error || error.message });
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="px-4 py-6 sm:px-0">
+                    <div className="bg-white shadow rounded-lg">
+                        <div className="px-4 py-5 sm:p-6">
+                            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Deploy New Community Token</h3>
+
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Token Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                            value={formData.name}
+                                            onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                            placeholder="e.g., Community Dollar"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Token Symbol</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                            value={formData.symbol}
+                                            onChange={(e) => setFormData({...formData, symbol: e.target.value})}
+                                            placeholder="e.g., CMD"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Master Minter Address</label>
+                                        <input
+                                            type="text"
+                                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                            value={formData.masterMinter}
+                                            onChange={(e) => setFormData({...formData, masterMinter: e.target.value})}
+                                            placeholder="0x..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Pauser Address</label>
+                                        <input
+                                            type="text"
+                                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                            value={formData.pauser}
+                                            onChange={(e) => setFormData({...formData, pauser: e.target.value})}
+                                            placeholder="0x..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Blacklister Address</label>
+                                        <input
+                                            type="text"
+                                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                            value={formData.blacklister}
+                                            onChange={(e) => setFormData({...formData, blacklister: e.target.value})}
+                                            placeholder="0x..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Owner Address</label>
+                                        <input
+                                            type="text"
+                                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                            value={formData.owner}
+                                            onChange={(e) => setFormData({...formData, owner: e.target.value})}
+                                            placeholder="0x..."
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                                    >
+                                        {loading ? 'Deploying...' : 'Deploy Token'}
+                                    </button>
+                                </div>
+                            </form>
+
+                            {result && (
+                                <div className={`mt-6 p-4 rounded-md ${result.success ? 'bg-green-50' : 'bg-red-50'}`}>
+                                    {result.success ? (
+                                        <div>
+                                            <h4 className="text-sm font-medium text-green-800">Token Deployed Successfully!</h4>
+                                            <p className="mt-2 text-sm text-green-700">
+                                                Job ID: {result.data.jobId}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <h4 className="text-sm font-medium text-red-800">Deployment Failed</h4>
+                                            <p className="mt-2 text-sm text-red-700">{result.error}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function MyTokens({ tokens, setTokens }) {
+            useEffect(() => {
+                // In a real app, this would fetch tokens from the API
+                // For now, we'll show a placeholder
+            }, []);
+
+            return (
+                <div className="px-4 py-6 sm:px-0">
+                    <div className="bg-white shadow rounded-lg">
+                        <div className="px-4 py-5 sm:p-6">
+                            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">My Community Tokens</h3>
+
+                            {tokens.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <div className="text-4xl mb-4">🪙</div>
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No tokens yet</h3>
+                                    <p className="text-gray-500 mb-4">Deploy your first community token to get started</p>
+                                    <button
+                                        onClick={() => window.location.hash = '#deploy'}
+                                        className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                                    >
+                                        Deploy Token
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {tokens.map((token, index) => (
+                                        <div key={index} className="border rounded-lg p-4">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <h4 className="text-lg font-medium text-gray-900">{token.name}</h4>
+                                                    <p className="text-sm text-gray-500">{token.symbol}</p>
+                                                    <p className="text-xs text-gray-400 mt-1">{token.address}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                        Active
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
