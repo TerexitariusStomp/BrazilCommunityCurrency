@@ -1,14 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const Bull = require('bull');
 const WhatsAppService = require('./services/whatsappService');
 const PluggyBankService = require('./services/pluggyService');
 const TokenDeployer = require('./services/tokenDeployer');
+const config = require('./config');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.set('trust proxy', 1);
+app.use(cors({ origin: config.corsOrigin === '*' ? true : config.corsOrigin }));
+app.use(express.json({ limit: config.bodyLimit }));
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -17,37 +18,37 @@ const whatsappService = new WhatsAppService();
 const pluggyService = new PluggyBankService();
 const tokenDeployer = new TokenDeployer();
 
-const deploymentQueue = new Bull('token-deployment', {
-    redis: { port: 6379, host: 'localhost' }
-});
+const isAddress = (addr) => typeof addr === 'string' && /^0x[a-fA-F0-9]{40}$/.test(addr);
+const requireFields = (obj, fields) => {
+  for (const f of fields) {
+    if (obj[f] === undefined || obj[f] === null || obj[f] === '') {
+      return `Missing field: ${f}`;
+    }
+  }
+  return null;
+};
 
 app.post('/api/deploy-token', async (req, res) => {
-    try {
-        const { name, symbol, masterMinter, pauser, blacklister, owner } = req.body;
-
-        const job = await deploymentQueue.add('deploy', {
-            name, symbol, masterMinter, pauser, blacklister, owner
-        });
-
-        res.json({ success: true, jobId: job.id });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+  try {
+    const { name, symbol, masterMinter, pauser, blacklister, owner } = req.body || {};
+    const missing = requireFields({ name, symbol, masterMinter, pauser, blacklister, owner }, ['name', 'symbol', 'masterMinter', 'pauser', 'blacklister', 'owner']);
+    if (missing) return res.status(400).json({ error: missing });
+    for (const a of [masterMinter, pauser, blacklister, owner]) {
+      if (!isAddress(a)) return res.status(400).json({ error: 'Invalid address provided' });
     }
+    const result = await tokenDeployer.deployToken(name, symbol, masterMinter, pauser, blacklister, owner);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-deploymentQueue.process('deploy', async (job) => {
-    const { name, symbol, masterMinter, pauser, blacklister, owner } = job.data;
-
-    const result = await tokenDeployer.deployToken(
-        name, symbol, masterMinter, pauser, blacklister, owner
-    );
-
-    return result;
-});
+// removed background queue; handled synchronously
 
 app.post('/api/connect-bank/:tokenAddress', async (req, res) => {
     try {
         const { tokenAddress } = req.params;
+        if (!isAddress(tokenAddress)) return res.status(400).json({ error: 'Invalid token address' });
         const connection = await pluggyService.createConnection(tokenAddress);
 
         res.json({
@@ -62,7 +63,9 @@ app.post('/api/connect-bank/:tokenAddress', async (req, res) => {
 
 app.post('/whatsapp', async (req, res) => {
     try {
-        const { sessionId, phoneNumber, text } = req.body;
+        const { sessionId, phoneNumber, text } = req.body || {};
+        const missing = requireFields({ sessionId, phoneNumber, text }, ['sessionId', 'phoneNumber', 'text']);
+        if (missing) return res.status(400).json({ error: missing });
         const response = await whatsappService.handleWhatsApp(sessionId, phoneNumber, text);
         res.json(JSON.parse(response));
     } catch (error) {
@@ -71,6 +74,17 @@ app.post('/whatsapp', async (req, res) => {
             message: 'Erro no sistema'
         });
     }
+});
+
+// Pluggy webhook endpoint
+app.post('/api/webhooks/pluggy', async (req, res) => {
+  try {
+    if (!req.body) return res.status(400).json({ error: 'Missing body' });
+    await pluggyService.handleWebhook(req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.post('/api/auth/verify', async (req, res) => {
@@ -141,7 +155,7 @@ app.get('/', (req, res) => {
 
                 <div style="margin-top: 40px; text-align: center;">
                     <p><strong>Status:</strong> <span style="color: green;">System Running ✅</span></p>
-                    <p>PostgreSQL: <span style="color: green;">Connected</span> | Redis: <span style="color: green;">Connected</span></p>
+                    <p>PostgreSQL: <span style="color: green;">Configured</span></p>
                 </div>
             </div>
         </body>
@@ -159,9 +173,14 @@ app.get('/health', (req, res) => {
     });
 });
 
-pluggyService.startBalanceUpdates();
+try { pluggyService.startBalanceUpdates(); } catch (_) {}
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// Basic error handler
+app.use((err, _req, res, _next) => {
+  const status = err.status || 500;
+  res.status(status).json({ error: err.message || 'Internal error' });
+});
+
+app.listen(config.port, () => {
+  console.log(`Server running on port ${config.port}`);
 });

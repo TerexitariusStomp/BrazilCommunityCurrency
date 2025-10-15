@@ -1,5 +1,6 @@
 const hre = require("hardhat");
 const fs = require("fs");
+require('dotenv').config();
 
 async function main() {
     const [deployer] = await hre.ethers.getSigners();
@@ -9,7 +10,8 @@ async function main() {
     const BankOracle = await hre.ethers.getContractFactory("BankOracle");
     const oracle = await BankOracle.deploy();
     await oracle.waitForDeployment();
-    console.log("BankOracle deployed to:", await oracle.getAddress());
+    const oracleAddress = await oracle.getAddress();
+    console.log("BankOracle deployed to:", oracleAddress);
 
     // Deploy Token Template
     const BankBackedToken = await hre.ethers.getContractFactory("BankBackedToken");
@@ -25,7 +27,8 @@ async function main() {
         "0x0000000000000000000000000000000000000000" // placeholder oracle address
     );
     await template.waitForDeployment();
-    console.log("Token template deployed to:", await template.getAddress());
+    const templateAddress = await template.getAddress();
+    console.log("Token template deployed to:", templateAddress);
 
     // Deploy Factory
     const TokenFactory = await hre.ethers.getContractFactory("TokenFactory");
@@ -35,20 +38,33 @@ async function main() {
         deployer.address
     );
     await factory.waitForDeployment();
-    console.log("TokenFactory deployed to:", await factory.getAddress());
+    const factoryAddress = await factory.getAddress();
+    console.log("TokenFactory deployed to:", factoryAddress);
+
+    // Authorize updater if provided
+    const updater = process.env.ORACLE_UPDATER_ADDRESS;
+    if (updater && updater.startsWith('0x') && updater.length === 42) {
+        const tx = await oracle.authorizeUpdater(updater, true);
+        await tx.wait();
+        console.log("Authorized oracle updater:", updater);
+    }
 
     // Save addresses
     const addresses = {
-        oracle: await oracle.getAddress(),
-        template: await template.getAddress(),
-        factory: await factory.getAddress(),
+        oracle: oracleAddress,
+        template: templateAddress,
+        factory: factoryAddress,
         deployedAt: new Date().toISOString()
     };
 
-    fs.writeFileSync(
-        './deployments/contracts.json',
-        JSON.stringify(addresses, null, 2)
-    );
+    try {
+        // backup existing
+        if (fs.existsSync('./deployments/contracts.json')) {
+            fs.copyFileSync('./deployments/contracts.json', './deployments/contracts.json.bak');
+        }
+    } catch (_) {}
+
+    fs.writeFileSync('./deployments/contracts.json', JSON.stringify(addresses, null, 2));
 }
 
 main()

@@ -62,3 +62,17 @@ CREATE TRIGGER update_whatsapp_sessions_updated_at
 BEFORE UPDATE ON whatsapp_sessions
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at();
+
+-- Authentication tokens for auditability
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    id SERIAL PRIMARY KEY,
+    phone_number VARCHAR(20) NOT NULL,
+    token VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    CONSTRAINT uq_auth_token UNIQUE (token)
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_phone ON auth_tokens(phone_number);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires ON auth_tokens(expires_at);

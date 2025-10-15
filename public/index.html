@@ -13,6 +13,27 @@
 <body class="bg-gray-100">
     <div id="root"></div>
 
+    <script>
+        // Configure API base when frontend runs on a separate origin (e.g., :3002)
+        (function () {
+          try {
+            var defaultApi = '';
+            if (location.port === '3002') {
+              defaultApi = 'http://localhost:3001';
+            }
+            // Allow overriding via window.API_BASE before this script
+            var base = window.API_BASE || defaultApi;
+            if (base) {
+              if (typeof axios !== 'undefined') {
+                axios.defaults.baseURL = base;
+              }
+            }
+          } catch (e) {
+            // no-op
+          }
+        })();
+    </script>
+
     <script type="text/babel">
         const { useState, useEffect } = React;
 

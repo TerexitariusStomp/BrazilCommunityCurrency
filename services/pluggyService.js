@@ -1,24 +1,32 @@
 const { PluggyClient } = require('pluggy-sdk');
 const ethers = require('ethers');
+const config = require('../config');
 
 class PluggyBankService {
     constructor() {
-        this.pluggy = new PluggyClient({
-            clientId: process.env.PLUGGY_CLIENT_ID,
-            clientSecret: process.env.PLUGGY_CLIENT_SECRET,
-            sandbox: process.env.NODE_ENV !== 'production'
-        });
+        const hasPluggyCreds = !!(config.pluggy.clientId && config.pluggy.clientSecret);
+        this.pluggy = hasPluggyCreds
+            ? new PluggyClient({
+                clientId: config.pluggy.clientId,
+                clientSecret: config.pluggy.clientSecret,
+                sandbox: config.env !== 'production'
+              })
+            : null;
 
-        this.provider = new ethers.JsonRpcProvider(process.env.RPC_ENDPOINT);
-        this.oracleWallet = new ethers.Wallet(process.env.ORACLE_UPDATE_KEY, this.provider);
-
-        // Load BankOracle contract
-        const BankOracleABI = require('../artifacts/contracts/BankOracle.sol/BankOracle.json').abi;
-        this.oracleContract = new ethers.Contract(
-            process.env.ORACLE_ADDRESS,
-            BankOracleABI,
-            this.oracleWallet
-        );
+        if (config.rpcEndpoint && config.oracleUpdateKey && config.oracleAddress) {
+            this.provider = new ethers.JsonRpcProvider(config.rpcEndpoint);
+            this.oracleWallet = new ethers.Wallet(config.oracleUpdateKey, this.provider);
+            const BankOracleABI = require('../artifacts/contracts/BankOracle.sol/BankOracle.json').abi;
+            this.oracleContract = new ethers.Contract(
+                config.oracleAddress,
+                BankOracleABI,
+                this.oracleWallet
+            );
+        } else {
+            this.provider = null;
+            this.oracleWallet = null;
+            this.oracleContract = null;
+        }
 
         this.connections = new Map();
     }
@@ -28,13 +36,17 @@ class PluggyBankService {
             throw new Error('Invalid token address provided');
         }
 
-        if (!process.env.BASE_URL) {
+        if (!this.pluggy) {
+            throw new Error('Pluggy not configured');
+        }
+
+        if (!config.baseUrl) {
             throw new Error('BASE_URL environment variable is required');
         }
 
         try {
             const connectSession = await this.pluggy.connect.create({
-                redirectUri: `${process.env.BASE_URL}/callback/pluggy`
+                redirectUri: `${config.baseUrl}/callback/pluggy`
             });
 
             this.connections.set(tokenAddress, {
@@ -55,11 +67,14 @@ class PluggyBankService {
     }
 
     async handleWebhook(event) {
+        if (!this.pluggy) {
+            throw new Error('Pluggy not configured');
+        }
         if (!event || !event.type) {
             throw new Error('Invalid webhook event: missing type');
         }
 
-        // Webhook signature verification is handled by Pluggy SDK
+        // Webhook signature verification handled by Pluggy SDK (if configured)
         switch (event.type) {
             case 'CONNECTION_SUCCESS':
                 if (!event.itemId) {
@@ -112,6 +127,7 @@ class PluggyBankService {
             });
 
             // Link account to token in oracle
+            if (!this.oracleContract) throw new Error('Oracle contract not configured');
             const linkTx = await this.oracleContract.linkAccount(tokenAddress, primaryAccount.id);
             await linkTx.wait();
 
@@ -177,6 +193,7 @@ class PluggyBankService {
                         continue;
                     }
 
+                    if (!this.oracleContract) throw new Error('Oracle contract not configured');
                     const updateTx = await this.oracleContract.updateBalance(
                         tokenAddress,
                         account.id,
@@ -194,6 +211,7 @@ class PluggyBankService {
     }
 
     startBalanceUpdates() {
+        if (!this.pluggy) return; // nothing to schedule
         setInterval(async () => {
             for (const [tokenAddress, connection] of this.connections) {
                 if (connection.status === 'connected') {
@@ -204,7 +222,7 @@ class PluggyBankService {
     }
 
     isHealthy() {
-        return !!this.pluggy && !!this.oracleContract;
+        return !!this.pluggy; // oracleContract may be intentionally unset until deployment
     }
 }
 

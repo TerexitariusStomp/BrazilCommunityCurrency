@@ -1,29 +1,36 @@
 const axios = require('axios');
 const EventEmitter = require('events');
-const Redis = require('ioredis');
 const { Pool } = require('pg');
+const config = require('../config');
 
 class WhatsAppService extends EventEmitter {
     constructor() {
         super();
-        this.redis = new Redis(process.env.REDIS_URL);
-        this.db = new Pool({ connectionString: process.env.DATABASE_URL });
-        this.sessions = new Map();
+        this.db = config.databaseUrl ? new Pool({ connectionString: config.databaseUrl }) : null;
     }
 
     async handleWhatsApp(sessionId, phoneNumber, text) {
         phoneNumber = this.normalizePhoneNumber(phoneNumber);
 
-        let session = await this.redis.get(`session:${sessionId}`);
-        if (!session) {
+        if (!this.db) throw new Error('Database not configured');
+
+        let sessionRow = await this.db.query(
+            'SELECT state FROM whatsapp_sessions WHERE session_id = $1 LIMIT 1',
+            [sessionId]
+        );
+        let session;
+        if (sessionRow.rows.length === 0) {
             session = {
                 state: 'MENU',
                 phoneNumber,
                 createdAt: Date.now()
             };
-            await this.redis.set(`session:${sessionId}`, JSON.stringify(session), 'EX', 3600);
         } else {
-            session = JSON.parse(session);
+            try {
+                session = sessionRow.rows[0].state || {};
+            } catch (_) {
+                session = { state: 'MENU', phoneNumber };
+            }
         }
 
         let response;
@@ -50,7 +57,12 @@ class WhatsAppService extends EventEmitter {
                 session.state = 'MENU';
         }
 
-        await this.redis.set(`session:${sessionId}`, JSON.stringify(session), 'EX', 3600);
+        await this.db.query(
+            `INSERT INTO whatsapp_sessions (session_id, phone_number, state)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (session_id) DO UPDATE SET phone_number = EXCLUDED.phone_number, state = EXCLUDED.state, updated_at = NOW()`,
+            [sessionId, phoneNumber, session]
+        );
 
         return this.formatResponse('CONTINUE', response);
     }
@@ -112,11 +124,19 @@ Digite o número da opção desejada`;
         // Simulate Privy phone authentication via WhatsApp
         // In production, integrate with Privy's phone auth API
         const authToken = `auth_${Math.random().toString(36).slice(2)}`;
-        await this.redis.set(`auth:${phoneNumber}`, authToken, 'EX', 300);
+        // Insert new token record with 5-min expiry
+        await this.db.query(
+            `INSERT INTO auth_tokens (phone_number, token, expires_at)
+             VALUES ($1, $2, NOW() + INTERVAL '5 minutes')`,
+            [phoneNumber, authToken]
+        );
 
         // Send WhatsApp message with verification link
+        if (!config.whatsapp.apiUrl || !config.whatsapp.apiKey) {
+            throw new Error('WhatsApp API not configured');
+        }
         await axios.post(
-            `${process.env.WHATSAPP_API_URL}/messages`,
+            `${config.whatsapp.apiUrl}/messages`,
             {
                 to: phoneNumber,
                 type: 'text',
@@ -125,7 +145,7 @@ Digite o número da opção desejada`;
                 }
             },
             {
-                headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_API_KEY}` }
+                headers: { 'Authorization': `Bearer ${config.whatsapp.apiKey}` }
             }
         );
 
@@ -133,17 +153,26 @@ Digite o número da opção desejada`;
     }
 
     async verifyAuthToken(phoneNumber, token) {
-        const storedToken = await this.redis.get(`auth:${phoneNumber}`);
-        if (storedToken !== token) {
-            throw new Error('Invalid auth token');
-        }
-
-        // Create or get wallet
+        if (!this.db) throw new Error('Database not configured');
+        const row = await this.db.query(
+            `SELECT id, expires_at, used_at
+             FROM auth_tokens
+             WHERE phone_number = $1 AND token = $2
+             ORDER BY created_at DESC
+             LIMIT 1`,
+            [phoneNumber, token]
+        );
+        const rec = row.rows[0];
+        if (!rec) throw new Error('Invalid auth token');
+        if (rec.used_at) throw new Error('Auth token already used');
+        const nowOk = await this.db.query('SELECT NOW() < $1 AS valid', [rec.expires_at]);
+        if (!nowOk.rows[0]?.valid) throw new Error('Auth token expired');
         const wallet = await this.registerUser(phoneNumber);
-
-        // Clean up
-        await this.redis.del(`auth:${phoneNumber}`);
-
+        // Mark token as used for audit trail
+        await this.db.query(
+            `UPDATE auth_tokens SET used_at = NOW() WHERE id = $1`,
+            [rec.id]
+        );
         return wallet;
     }
 
@@ -172,6 +201,7 @@ Digite o número da opção desejada`;
             address: `0x${Math.random().toString(16).slice(2, 42)}`
         };
 
+        if (!this.db) throw new Error('Database not configured');
         await this.db.query(
             'INSERT INTO users (privy_user_id, phone_number) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [wallet.userId, phoneNumber]
@@ -221,6 +251,7 @@ Digite o número da opção desejada`;
     }
 
     async getWalletByPhone(phoneNumber) {
+        if (!this.db) return null;
         const result = await this.db.query(
             'SELECT * FROM wallets WHERE phone = $1 LIMIT 1',
             [phoneNumber]
@@ -229,7 +260,7 @@ Digite o número da opção desejada`;
     }
 
     isHealthy() {
-        return !!this.redis && !!this.db;
+        return !!this.db;
     }
 }
 
