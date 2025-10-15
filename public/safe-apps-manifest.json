@@ -1,0 +1,11 @@
+{
+  "name": "Pluggy Community Currency",
+  "description": "Deploy bank-backed tokens and connect bank accounts. Encourages 2-of-3 multisig.",
+  "iconPath": "/favicon.ico",
+  "safeAppsSdkVersion": "^9.0.0",
+  "providedBy": {
+    "name": "Pluggy Community",
+    "url": "https://example.com"
+  }
+}
+

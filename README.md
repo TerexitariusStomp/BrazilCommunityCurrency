@@ -30,6 +30,12 @@ A production-ready blockchain-based community currency system that integrates wi
 - **Token Launcher**: Web interface for creating new community currencies
 - **React Components**: Modern, responsive user interface
 
+#### Safe Multisig & Rainbow
+- The header includes a wallet connector that supports Rainbow/mobile via WalletConnect and browser wallets.
+- If the app runs inside a Safe App, it auto-detects the Safe via Safe Apps SDK and prefills the deploy roles with the Safe address. It also shows threshold/owners when available.
+- The Deploy form includes a Multisig Setup area to add signer addresses (owners) and a threshold. It encourages at least a 2-of-3 configuration.
+- When not inside a Safe, connect your multisig (Safe) or paste your Safe address into Owner/Minter/Pauser/Blacklister so your multisig controls the token.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -112,6 +118,15 @@ REDIS_URL=redis://your-production-redis:6379
 PORT=3000
 ```
 
+### Wallet Connection (Rainbow / Multisig)
+
+- The web UI header includes a wallet connect control to help users connect via Rainbow (mobile) using WalletConnect or via a browser wallet.
+- To enable Rainbow/mobile connection, set a WalletConnect project id in the browser before loading the page:
+  - Open the browser console and run: `window.WC_PROJECT_ID = 'your_walletconnect_project_id'` then refresh.
+  - Click “Connect Rainbow / Mobile” to pair with Rainbow or any WalletConnect-compatible wallet.
+- Important: Deployments should be controlled by your multisig (e.g., Safe). If you connect an EOA by mistake, paste your multisig address into the Owner/Master Minter/Pauser/Blacklister fields so the multisig retains control.
+- The UI auto-fills these roles with the connected address and shows a small “Multisig/Contract” badge when the connected account looks like a contract (such as a Safe).
+
 ## 📋 API Endpoints
 
 ### Token Management
@@ -150,7 +165,7 @@ npx hardhat run scripts/deploy.js --network celo
 npx hardhat run scripts/deploy.js --network celo-mainnet
 ```
 
-### Application
+### Application (API + Frontend via Express)
 ```bash
 # Build for production
 npm run build
@@ -158,6 +173,36 @@ npm run build
 # Start production server
 npm run start
 ```
+
+### Frontend-only (Static Hosting)
+
+You can deploy just the `public/` frontend to any static host (Netlify, Vercel static, GitHub Pages, S3, etc.). The UI calls the API configured via a global `window.API_BASE`.
+
+1) Configure frontend env for static hosting
+
+```bash
+cp public/env.example.js public/env.js
+# Edit public/env.js and set:
+#   window.API_BASE = 'https://your-api.domain';
+#   window.WC_PROJECT_ID = 'your_walletconnect_project_id';
+```
+
+2) Deploy the `public/` folder using your provider’s instructions, or use Docker + NGINX:
+
+```bash
+# Build static image
+docker build -f Dockerfile.frontend -t community-frontend .
+
+# Run locally on :8080
+docker run --rm -p 8080:80 \
+  -v "$PWD/public/env.js:/usr/share/nginx/html/env.js:ro" \
+  community-frontend
+```
+
+For Netlify/Vercel:
+- Publish directory: `public`
+- Add/serve `public/env.js` with the correct `window.API_BASE` pointing at your Express API.
+
 
 ## 🔒 Security
 
