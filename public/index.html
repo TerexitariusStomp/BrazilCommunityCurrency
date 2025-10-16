@@ -8,9 +8,35 @@
     // Enable class-based dark mode for Tailwind CDN
     tailwind.config = { darkMode: 'class' };
   </script>
-  <script src="https://cdn.tailwindcss.com" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="assets/tailwind.css" />
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script>
+    (function(){
+      try {
+        var R = window.React;
+        if (!R || R.__patchedCreateElement) return;
+        var orig = R.createElement;
+        function coerceChild(c){
+          if (c == null) return c;
+          if (Array.isArray(c)) return c.map(coerceChild);
+          if (R.isValidElement && R.isValidElement(c)) return c;
+          var t = typeof c;
+          if (t === 'object') {
+            if (c && typeof c.message === 'string') return c.message;
+            try { return JSON.stringify(c); } catch(_) { return String(c); }
+          }
+          return c;
+        }
+        R.createElement = function(type, props){
+          var args = Array.prototype.slice.call(arguments);
+          for (var i = 2; i < args.length; i++) args[i] = coerceChild(args[i]);
+          return orig.apply(R, args);
+        };
+        R.__patchedCreateElement = true;
+      } catch (_) {}
+    })();
+  </script>
 <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
   <!-- Safe (Gnosis) Apps SDK & Provider UMD builds -->
@@ -87,6 +113,7 @@
     <script src="assets/app.js" defer></script>
 </body>
 </html>
+
 
 
 
