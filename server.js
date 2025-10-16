@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -10,6 +11,8 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(cors({ origin: config.corsOrigin === '*' ? true : config.corsOrigin }));
 app.use(express.json({ limit: config.bodyLimit }));
+// Support Twilio x-www-form-urlencoded webhook payloads
+app.use(express.urlencoded({ extended: false }));
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -17,6 +20,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const whatsappService = new WhatsAppService();
 const pluggyService = new PluggyBankService();
 const tokenDeployer = new TokenDeployer();
+// no SMS service; Twilio used only for WhatsApp
 
 const isAddress = (addr) => typeof addr === 'string' && /^0x[a-fA-F0-9]{40}$/.test(addr);
 const requireFields = (obj, fields) => {
@@ -30,13 +34,13 @@ const requireFields = (obj, fields) => {
 
 app.post('/api/deploy-token', async (req, res) => {
   try {
-    const { name, symbol, masterMinter, pauser, blacklister, owner } = req.body || {};
+    const { name, symbol, masterMinter, pauser, blacklister, owner, network } = req.body || {};
     const missing = requireFields({ name, symbol, masterMinter, pauser, blacklister, owner }, ['name', 'symbol', 'masterMinter', 'pauser', 'blacklister', 'owner']);
     if (missing) return res.status(400).json({ error: missing });
     for (const a of [masterMinter, pauser, blacklister, owner]) {
       if (!isAddress(a)) return res.status(400).json({ error: 'Invalid address provided' });
     }
-    const result = await tokenDeployer.deployToken(name, symbol, masterMinter, pauser, blacklister, owner);
+    const result = await tokenDeployer.deployToken(name, symbol, masterMinter, pauser, blacklister, owner, network);
     res.json({ success: true, ...result });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -48,8 +52,9 @@ app.post('/api/deploy-token', async (req, res) => {
 app.post('/api/connect-bank/:tokenAddress', async (req, res) => {
     try {
         const { tokenAddress } = req.params;
+        const { network } = req.body || {};
         if (!isAddress(tokenAddress)) return res.status(400).json({ error: 'Invalid token address' });
-        const connection = await pluggyService.createConnection(tokenAddress);
+        const connection = await pluggyService.createConnection(tokenAddress, network || 'celo');
 
         res.json({
             success: true,
@@ -61,18 +66,92 @@ app.post('/api/connect-bank/:tokenAddress', async (req, res) => {
     }
 });
 
-app.post('/whatsapp', async (req, res) => {
+// Link a phone (WhatsApp) to a wallet address and settle pending transfers
+app.post('/api/whatsapp/link', async (req, res) => {
+  try {
+    const { phone, address } = req.body || {};
+    if (!phone || !address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return res.status(400).json({ error: 'Provide phone and a valid wallet address' });
+    }
+    await whatsappService.setWalletForPhone(phone, address);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Register a WhatsApp user without collecting a wallet address
+app.post('/api/whatsapp/register', async (req, res) => {
+  try {
+    const { phone } = req.body || {};
+    if (!phone) return res.status(400).json({ error: 'Provide phone' });
+    await whatsappService.registerUser(phone);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Link a PIX key to a wallet for a specific token
+app.post('/api/pix/link', async (req, res) => {
+  try {
+    const { tokenAddress, pixKey, wallet, network } = req.body || {};
+    if (!isAddress(tokenAddress) || !isAddress(wallet) || !pixKey) {
+      return res.status(400).json({ error: 'tokenAddress, wallet, and pixKey are required' });
+    }
+    pluggyService.linkPixKey(tokenAddress, pixKey, wallet);
+    // Kick an immediate mint scan for this token
+    setTimeout(() => pluggyService.processIncomingMints(tokenAddress).catch(() => {}), 100);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Request redemption (user should transfer tokens to redemption wallet first)
+app.post('/api/tokens/:address/redeem', async (req, res) => {
+  try {
+    const { address } = req.params;
+    const { pixKey, amount, network } = req.body || {};
+    if (!isAddress(address)) return res.status(400).json({ error: 'Invalid token address' });
+    if (!pixKey || !amount) return res.status(400).json({ error: 'pixKey and amount are required' });
+    await pluggyService.redeem(address, pixKey, amount, network || 'celo');
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Removed legacy JSON WhatsApp endpoint; use /twilio/whatsapp
+
+// Twilio WhatsApp webhook: set this URL in Twilio console for WhatsApp sandbox/number
+app.post('/twilio/whatsapp', async (req, res) => {
     try {
-        const { sessionId, phoneNumber, text } = req.body || {};
-        const missing = requireFields({ sessionId, phoneNumber, text }, ['sessionId', 'phoneNumber', 'text']);
-        if (missing) return res.status(400).json({ error: missing });
-        const response = await whatsappService.handleWhatsApp(sessionId, phoneNumber, text);
-        res.json(JSON.parse(response));
+        const signature = req.get('x-twilio-signature');
+        const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+        const params = req.body;
+        const token = process.env.TWILIO_AUTH_TOKEN || (config.twilio && config.twilio.authToken);
+        if (!token) return res.status(500).send('Twilio not configured');
+        const valid = require('twilio').validateRequest(token, signature, url, params);
+        if (!valid) return res.status(403).send('Invalid request');
+
+        const from = (req.body?.From || '').replace(/^whatsapp:/, '');
+        const body = (req.body?.Body || '').trim();
+        const sessionId = from;
+
+        const replyPayload = await whatsappService.handleWhatsApp(sessionId, from, body);
+        const parsed = JSON.parse(replyPayload || '{}');
+        const text = parsed.message || 'OK';
+
+        const MessagingResponse = require('twilio').twiml.MessagingResponse;
+        const twiml = new MessagingResponse();
+        twiml.message(text);
+        res.type('text/xml').send(twiml.toString());
     } catch (error) {
-        res.status(500).json({
-            sessionEnd: true,
-            message: 'Erro no sistema'
-        });
+        const MessagingResponse = require('twilio').twiml.MessagingResponse;
+        const twiml = new MessagingResponse();
+        twiml.message('Erro no sistema. Tente novamente.');
+        res.type('text/xml').send(twiml.toString());
     }
 });
 
@@ -144,7 +223,7 @@ app.get('/', (req, res) => {
 
                     <div class="endpoint">
                         <span class="method">POST</span>
-                        <code>/whatsapp</code> - WhatsApp user interface
+                        <code>/twilio/whatsapp</code> - Twilio WhatsApp webhook
                     </div>
 
                     <div class="endpoint">
@@ -168,7 +247,8 @@ app.get('/health', (req, res) => {
         status: 'healthy',
         services: {
             whatsapp: whatsappService.isHealthy(),
-            pluggy: pluggyService.isHealthy()
+            pluggy: pluggyService.isHealthy(),
+            twilioWhatsApp: !!(config.twilio && config.twilio.authToken)
         }
     });
 });
@@ -180,6 +260,8 @@ app.use((err, _req, res, _next) => {
   const status = err.status || 500;
   res.status(status).json({ error: err.message || 'Internal error' });
 });
+
+// Removed Twilio SMS webhook; only WhatsApp is supported via /twilio/whatsapp
 
 app.listen(config.port, () => {
   console.log(`Server running on port ${config.port}`);

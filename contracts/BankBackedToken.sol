@@ -4,6 +4,8 @@ import "./FiatTokenV2.sol";
 
 contract BankBackedToken is FiatTokenV2 {
     address public bankOracle;
+    // Single authority allowed to mint via auto-mint backend flow
+    address public immutable mintAdmin;
 
     constructor(
         string memory tokenName,
@@ -21,6 +23,7 @@ contract BankBackedToken is FiatTokenV2 {
         _setBlacklister(newBlacklister);
         _transferOwnership(newOwner);
         bankOracle = _bankOracle;
+        mintAdmin = newMasterMinter;
     }
 
     modifier hasBacking(uint256 amount) {
@@ -34,11 +37,38 @@ contract BankBackedToken is FiatTokenV2 {
         override
         whenNotPaused
         onlyMinters
+        returns (bool)
+    {
+        require(msg.sender == mintAdmin, "Only mint admin");
+        return _mintWithBacking(_to, _amount);
+    }
+
+    function _mintWithBacking(address _to, uint256 _amount)
+        internal
         hasBacking(_amount)
         returns (bool)
     {
         return super.mint(_to, _amount);
     }
+
+    // MasterMinter can mint without allowance as long as reserves back it
+    function adminMintBacked(address _to, uint256 _amount)
+        external
+        whenNotPaused
+        onlyMasterMinter
+        notBlacklisted(_to)
+        hasBacking(_amount)
+        returns (bool)
+    {
+        _mint(_to, _amount);
+        emit Mint(msg.sender, _to, _amount);
+        return true;
+    }
+
+    // Note: we deliberately avoid overriding configureMinter/removeMinter in FiatTokenV2
+    // to minimize changes. The single-admin policy is enforced by requiring msg.sender
+    // to equal `mintAdmin` inside mint(). Even if other minters are configured,
+    // they will not be able to call mint successfully.
 }
 
 interface IBankOracle {

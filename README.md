@@ -139,7 +139,7 @@ PORT=3000
 - `POST /api/webhooks/pluggy` - Handle Pluggy webhooks
 
 ### WhatsApp Integration
-- `POST /api/whatsapp/send` - Send community notifications
+- `POST /twilio/whatsapp` - Twilio WhatsApp webhook (use this with Twilio)
 
 ## 🧪 Testing
 
@@ -198,6 +198,188 @@ docker run --rm -p 8080:80 \
   -v "$PWD/public/env.js:/usr/share/nginx/html/env.js:ro" \
   community-frontend
 ```
+
+## System Architecture
+
+### Five-Layer Design
+
+- Reserve Bank Account — Brazilian bank holding BRL reserves
+- Pluggy SDK — Fetches real-time balance via Open Finance API
+- Custom Oracle — Node.js service that reads Pluggy and writes to blockchain
+- Smart Contract — Stores reserve balance, mints/burns tokens
+- User Interface — PIX deposits, redemptions, reserve dashboard
+
+```
+Reserve Bank → Pluggy API → Custom Oracle → Blockchain Contract
+```
+
+### Minting Flow: BRL → Stablecoin
+
+#### Step 1: User Deposits BRL via PIX
+
+- User sends PIX to reserve account with wallet in memo: `MINT-0x1234...`
+- PIX settles instantly (Brazil's real-time payment system)
+
+#### Step 2: Pluggy Detects Deposit
+
+```javascript
+const accounts = await pluggy.fetchAccounts(itemId);
+const balance = accounts[0].balance; // Updated BRL balance
+```
+
+- Pluggy webhook fires on new transaction
+- Backend fetches updated balance using `fetchAccounts()`
+- Extracts wallet address from transaction memo
+
+#### Step 3: Oracle Updates Reserve On-Chain
+
+```javascript
+const balanceWei = ethers.parseEther(balanceBRL.toString());
+await contract.updateReserveBalance(balanceWei);
+```
+
+- Oracle reads new balance from Pluggy
+- Converts to Wei (18 decimals)
+- Submits signed transaction to smart contract
+- Contract stores updated `reserveBalance` state variable
+
+#### Step 4: Automated Minting
+
+```text
+function mint(address to, uint256 amount) external {
+    require(reserveBalance >= totalSupply() + amount);
+    _mint(to, amount);
+}
+```
+
+- Backend calls `mint()` with user's address and amount
+- Contract verifies: reserves ≥ supply + new tokens
+- Mints tokens to user's wallet
+
+### Burning Flow: Stablecoin → BRL
+
+#### Step 1: User Requests Redemption
+
+```text
+function requestRedemption(uint256 amount, string pixKey) {
+    _transfer(msg.sender, address(this), amount); // Lock tokens
+    redemptions[id] = RedemptionRequest({...});
+}
+```
+
+- User calls `requestRedemption()` with amount and PIX key
+- Tokens transferred to contract (locked, not burned yet)
+
+#### Step 2: Backend Processes Request
+
+- Oracle monitors `RedemptionRequested` events
+- Validates redemption is legitimate
+
+#### Step 3: PIX Payment Sent
+
+```javascript
+// Via Pluggy Payment Initiation API
+await pluggy.initiatePayment({
+    accountId: reserveAccountId,
+    recipient: pixKey,
+    amount: redemptionAmount
+});
+```
+
+- Oracle uses Pluggy Payment Initiation to send BRL
+- User receives funds instantly via PIX
+
+#### Step 4: Token Burning
+
+```text
+function processRedemption(uint256 requestId) external {
+    _burn(address(this), redemptions[requestId].amount);
+}
+```
+
+- After PIX confirmation, oracle calls `processRedemption()`
+- Tokens permanently destroyed
+- Oracle updates reserve balance on-chain
+
+### Key Code Components
+
+#### Custom Oracle Service (Node.js + ethers.js)
+
+```javascript
+class BRLStablecoinOracle {
+  async updateReserveBalance() {
+    // 1. Fetch from Pluggy
+    const balance = await this.pluggy.getBalance();
+    
+    // 2. Submit to blockchain
+    const tx = await this.contract.updateReserveBalance(
+      ethers.parseEther(balance.toString())
+    );
+    await tx.wait();
+  }
+  
+  start(intervalSeconds = 60) {
+    setInterval(() => this.updateReserveBalance(), intervalSeconds * 1000);
+    setInterval(() => this.processMintRequests(), 30 * 1000);
+    setInterval(() => this.processRedemptions(), 30 * 1000);
+  }
+}
+```
+
+#### Smart Contract (Solidity)
+
+```text
+contract BRLStablecoin is ERC20, AccessControl {
+    uint256 public reserveBalance;
+    uint256 public lastReserveUpdate;
+    
+    function updateReserveBalance(uint256 newBalance) 
+        external onlyRole(ORACLE_ROLE) 
+    {
+        reserveBalance = newBalance;
+        lastReserveUpdate = block.timestamp;
+    }
+    
+    function checkCollateralization(uint256 additionalSupply) 
+        public view returns (bool) 
+    {
+        require(block.timestamp - lastReserveUpdate <= 1 hours);
+        return reserveBalance >= totalSupply() + additionalSupply;
+    }
+}
+```
+
+#### Pluggy Integration
+
+```javascript
+import { PluggyClient } from 'pluggy-sdk';
+
+const pluggy = new PluggyClient({
+  clientId: process.env.PLUGGY_CLIENT_ID,
+  clientSecret: process.env.PLUGGY_CLIENT_SECRET
+});
+
+// Fetch balance
+const accounts = await pluggy.fetchAccounts(itemId);
+const balance = accounts[0].balance; // BRL amount
+
+// Monitor deposits
+const txs = await pluggy.fetchTransactions(itemId, accountId, {
+  from: new Date(Date.now() - 5 * 60 * 1000)
+});
+```
+
+### Advantages of Custom Oracle vs Chainlink
+
+
+## Twilio for WhatsApp
+
+Use Twilio’s WhatsApp channel to drive the existing WhatsApp conversational flow.
+
+- Configure env: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` (E.164, e.g., +14155552671)
+- Point your Twilio WhatsApp sandbox/number webhook to `POST https://<your-domain>/twilio/whatsapp`
+- Inbound messages are processed by the WhatsApp menu engine and replied via TwiML.
+- Outbound messages (e.g., auth link) use Twilio.
 
 For Netlify/Vercel:
 - Publish directory: `public`

@@ -49,4 +49,22 @@ describe("BankBackedToken", function () {
     await token.connect(minter).mint(owner.address, 100);
     expect(await token.balanceOf(owner.address)).to.equal(100);
   });
+
+  it("MasterMinter can adminMintBacked without allowance (with backing)", async function () {
+    // No allowance configured for minter in this test; call as masterMinter directly
+    await bankOracle.connect(owner).linkAccount(await token.getAddress(), "test-account");
+    await bankOracle.connect(owner).updateBalance(await token.getAddress(), "test-account", 1_000_000);
+
+    await expect(token.connect(minter).adminMintBacked(owner.address, 5000))
+      .to.emit(token, 'Mint');
+    expect(await token.balanceOf(owner.address)).to.equal(5000);
+  });
+
+  it("Should reject mint from non-admin even if minter", async function () {
+    const [, , , , attacker] = await ethers.getSigners();
+    // MasterMinter is `minter` per constructor; attacker cannot be configured due to restriction
+    await expect(token.connect(attacker).configureMinter(attacker.address, 1000)).to.be.revertedWith(
+      'Only mintAdmin can be a minter'
+    );
+  });
 });

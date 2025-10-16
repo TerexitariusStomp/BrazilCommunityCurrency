@@ -1,9 +1,9 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\contracts\\BankBackedToken.sol": {
-      "lastModificationDate": 1760465466979,
-      "contentHash": "2853469b72bd9d70bcd27e31604bc366",
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/contracts/BankBackedToken.sol": {
+      "lastModificationDate": 1760587064361,
+      "contentHash": "6ddc9017483f57c9d3d260507f1d3a1e",
       "sourceName": "contracts/BankBackedToken.sol",
       "solcConfig": {
         "version": "0.8.19",
@@ -39,9 +39,9 @@
         "IBankOracle"
       ]
     },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\contracts\\FiatTokenV2.sol": {
-      "lastModificationDate": 1760465456617,
-      "contentHash": "3005dc61d84b3b96bddcd5d1e89aa8f9",
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/contracts/FiatTokenV2.sol": {
+      "lastModificationDate": 1760581032304,
+      "contentHash": "f0325e0ded52c7cdbfee4ad338743abd",
       "sourceName": "contracts/FiatTokenV2.sol",
       "solcConfig": {
         "version": "0.8.19",
@@ -78,45 +78,8 @@
         "FiatTokenV2"
       ]
     },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\node_modules\\@openzeppelin\\contracts\\security\\Pausable.sol": {
-      "lastModificationDate": 1760465173378,
-      "contentHash": "25c8108f36fdd472bc78d4c4af240c11",
-      "sourceName": "@openzeppelin/contracts/security/Pausable.sol",
-      "solcConfig": {
-        "version": "0.8.19",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../utils/Context.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "Pausable"
-      ]
-    },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\node_modules\\@openzeppelin\\contracts\\access\\Ownable.sol": {
-      "lastModificationDate": 1760465173329,
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/node_modules/@openzeppelin/contracts/access/Ownable.sol": {
+      "lastModificationDate": 1760490966773,
       "contentHash": "5a20b2cad87ddb61c7a3a6af21289e28",
       "sourceName": "@openzeppelin/contracts/access/Ownable.sol",
       "solcConfig": {
@@ -152,8 +115,45 @@
         "Ownable"
       ]
     },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\ERC20.sol": {
-      "lastModificationDate": 1760465170004,
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/node_modules/@openzeppelin/contracts/security/Pausable.sol": {
+      "lastModificationDate": 1760490966782,
+      "contentHash": "25c8108f36fdd472bc78d4c4af240c11",
+      "sourceName": "@openzeppelin/contracts/security/Pausable.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../utils/Context.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "Pausable"
+      ]
+    },
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/node_modules/@openzeppelin/contracts/token/ERC20/ERC20.sol": {
+      "lastModificationDate": 1760490966032,
       "contentHash": "3ae5166c6827a9cf1a7a462d1632b464",
       "sourceName": "@openzeppelin/contracts/token/ERC20/ERC20.sol",
       "solcConfig": {
@@ -191,8 +191,8 @@
         "ERC20"
       ]
     },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\node_modules\\@openzeppelin\\contracts\\utils\\Context.sol": {
-      "lastModificationDate": 1760465165683,
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/node_modules/@openzeppelin/contracts/utils/Context.sol": {
+      "lastModificationDate": 1760490965655,
       "contentHash": "f07feb4a44b1a4872370da5aa70e8e46",
       "sourceName": "@openzeppelin/contracts/utils/Context.sol",
       "solcConfig": {
@@ -226,43 +226,8 @@
         "Context"
       ]
     },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\IERC20.sol": {
-      "lastModificationDate": 1760465171844,
-      "contentHash": "df36f7051335cd1e748b1b6463b7fdd3",
-      "sourceName": "@openzeppelin/contracts/token/ERC20/IERC20.sol",
-      "solcConfig": {
-        "version": "0.8.19",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "IERC20"
-      ]
-    },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\extensions\\IERC20Metadata.sol": {
-      "lastModificationDate": 1760465171980,
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/node_modules/@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": {
+      "lastModificationDate": 1760490966573,
       "contentHash": "909ab67fc5c25033fe6cd364f8c056f9",
       "sourceName": "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol",
       "solcConfig": {
@@ -298,51 +263,10 @@
         "IERC20Metadata"
       ]
     },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\contracts\\TokenFactory.sol": {
-      "lastModificationDate": 1760464692487,
-      "contentHash": "caf1c5c776cea3abae11810ad0aa3d31",
-      "sourceName": "contracts/TokenFactory.sol",
-      "solcConfig": {
-        "version": "0.8.19",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/proxy/Clones.sol",
-        "@openzeppelin/contracts/access/Ownable.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "FiatTokenProxy",
-        "IBankBackedToken",
-        "IFiatTokenProxy",
-        "TokenFactory"
-      ]
-    },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\node_modules\\@openzeppelin\\contracts\\proxy\\Clones.sol": {
-      "lastModificationDate": 1760465165522,
-      "contentHash": "89c075565795af5e3e88fc75642a4af8",
-      "sourceName": "@openzeppelin/contracts/proxy/Clones.sol",
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol": {
+      "lastModificationDate": 1760490966564,
+      "contentHash": "df36f7051335cd1e748b1b6463b7fdd3",
+      "sourceName": "@openzeppelin/contracts/token/ERC20/IERC20.sol",
       "solcConfig": {
         "version": "0.8.19",
         "settings": {
@@ -371,10 +295,50 @@
         "^0.8.0"
       ],
       "artifacts": [
-        "Clones"
+        "IERC20"
       ]
     },
-    "C:\\Users\\terex\\Documents\\pluggycommunitycurrency\\contracts\\BankOracle.sol": {
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/contracts/TokenFactory.sol": {
+      "lastModificationDate": 1760586612984,
+      "contentHash": "bfb88f9c159ba7a3dec8d9d16bf52d9c",
+      "sourceName": "contracts/TokenFactory.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/access/Ownable.sol",
+        "./FiatTokenV2.sol",
+        "./BankBackedToken.sol",
+        "./BankOracle.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "TokenFactory"
+      ]
+    },
+    "/mnt/c/Users/terex/Documents/pluggycommunitycurrency/contracts/BankOracle.sol": {
       "lastModificationDate": 1760464626390,
       "contentHash": "4299bc2f78cb7c6d0eea9d752806db66",
       "sourceName": "contracts/BankOracle.sol",

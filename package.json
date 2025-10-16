@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "compile": "hardhat compile",
     "deploy": "hardhat run scripts/deploy.js",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "build": "node scripts/build.js",
+    "serve:public": "node scripts/servePublic.js"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.9.0",
@@ -18,7 +20,8 @@
     "express": "^4.21.2",
     "hardhat": "^2.17.0",
     "pg": "^8.16.3",
-    "pluggy-sdk": "^0.77.0"
+    "pluggy-sdk": "^0.77.0",
+    "twilio": "^5.3.5"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",

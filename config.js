@@ -18,10 +18,6 @@ module.exports = {
 
   // External services
   databaseUrl: assertEnv('DATABASE_URL', { required: false }),
-  whatsapp: {
-    apiUrl: assertEnv('WHATSAPP_API_URL', { required: false }),
-    apiKey: assertEnv('WHATSAPP_API_KEY', { required: false }),
-  },
   pluggy: {
     clientId: assertEnv('PLUGGY_CLIENT_ID', { required: false }),
     clientSecret: assertEnv('PLUGGY_CLIENT_SECRET', { required: false }),
@@ -30,11 +26,23 @@ module.exports = {
 
   // Blockchain
   rpcEndpoint: assertEnv('RPC_ENDPOINT', { required: false }),
+  rpcEndpointSepolia: assertEnv('RPC_ENDPOINT_SEPOLIA', { required: false, default: 'https://forno.celo-sepolia.celo-testnet.org' }),
   privateKey: assertEnv('PRIVATE_KEY', { required: false }),
   oracleUpdateKey: assertEnv('ORACLE_UPDATE_KEY', { required: false }),
   oracleAddress: assertEnv('ORACLE_ADDRESS', { required: false }),
+  oracleAddressSepolia: assertEnv('ORACLE_ADDRESS_SEPOLIA', { required: false }),
   factoryAddress: assertEnv('FACTORY_ADDRESS', { required: false }),
+  factoryAddressSepolia: assertEnv('FACTORY_ADDRESS_SEPOLIA', { required: false }),
   enableOnchainDeploy: parseBool(assertEnv('ENABLE_ONCHAIN_DEPLOY', { default: 'false' })),
+
+  // Twilio SMS (for SMS-based UX)
+  twilio: {
+    accountSid: assertEnv('TWILIO_ACCOUNT_SID', { required: false }),
+    authToken: assertEnv('TWILIO_AUTH_TOKEN', { required: false }),
+    phoneNumber: assertEnv('TWILIO_PHONE_NUMBER', { required: false }),
+  },
+
+  // (removed SMS ODIS demo)
 
   // HTTP
   corsOrigin: assertEnv('CORS_ORIGIN', { default: '*' }),

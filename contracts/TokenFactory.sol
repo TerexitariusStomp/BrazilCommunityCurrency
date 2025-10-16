@@ -1,16 +1,13 @@
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./FiatTokenV2.sol";
+import "./BankBackedToken.sol";
+import "./BankOracle.sol";
 
 contract TokenFactory {
-    address public immutable tokenTemplate;
-    address public immutable bankOracle;
-    address public proxyAdmin;
-
     struct TokenDeployment {
         address tokenAddress;
-        address proxyAddress;
         string name;
         string symbol;
         address deployer;
@@ -24,14 +21,11 @@ contract TokenFactory {
         address indexed proxy,
         address indexed deployer,
         string name,
-        string symbol
+        string symbol,
+        address oracle,
+        string currency,
+        uint8 decimals
     );
-
-    constructor(address _tokenTemplate, address _bankOracle, address _proxyAdmin) {
-        tokenTemplate = _tokenTemplate;
-        bankOracle = _bankOracle;
-        proxyAdmin = _proxyAdmin;
-    }
 
     function deployToken(
         string memory name,
@@ -41,94 +35,37 @@ contract TokenFactory {
         address blacklister,
         address owner
     ) external returns (address tokenProxy, address implementation) {
-        implementation = Clones.clone(tokenTemplate);
+        // Parameters for Circle-style token: default to BRL 6 decimals to align with centavos
+        string memory currency = "BRL";
+        uint8 decimals_ = 6;
 
-        bytes memory proxyInitCode = abi.encodePacked(
-            type(FiatTokenProxy).creationCode,
-            abi.encode(implementation)
-        );
+        // Deploy a dedicated oracle for this token and transfer ownership to the provided owner
+        BankOracle oracle = new BankOracle();
+        oracle.transferOwnership(owner);
 
-        bytes32 salt = keccak256(abi.encodePacked(name, symbol, block.timestamp));
-
-        assembly {
-            tokenProxy := create2(0, add(proxyInitCode, 0x20), mload(proxyInitCode), salt)
-        }
-
-        IBankBackedToken(tokenProxy).initializeBankBacked(
+        // Deploy the bank-backed FiatTokenV2 wrapper that consults the per-token oracle
+        BankBackedToken token = new BankBackedToken(
             name,
             symbol,
-            "BRL",
-            2,
+            currency,
+            decimals_,
             masterMinter,
             pauser,
             blacklister,
             owner,
-            bankOracle
+            address(oracle)
         );
 
-        IFiatTokenProxy(tokenProxy).changeAdmin(proxyAdmin);
-
         deployments.push(TokenDeployment({
-            tokenAddress: implementation,
-            proxyAddress: tokenProxy,
+            tokenAddress: address(token),
             name: name,
             symbol: symbol,
             deployer: msg.sender,
             deployedAt: block.timestamp
         }));
 
-        emit TokenDeployed(tokenProxy, implementation, msg.sender, name, symbol);
+        emit TokenDeployed(address(token), address(token), msg.sender, name, symbol, address(oracle), currency, decimals_);
 
-        return (tokenProxy, implementation);
+        return (address(token), address(token));
     }
-}
-
-interface IBankBackedToken {
-    function initializeBankBacked(
-        string memory tokenName,
-        string memory tokenSymbol,
-        string memory tokenCurrency,
-        uint8 tokenDecimals,
-        address newMasterMinter,
-        address newPauser,
-        address newBlacklister,
-        address newOwner,
-        address _bankOracle
-    ) external;
-}
-
-interface IFiatTokenProxy {
-    function changeAdmin(address newAdmin) external;
-}
-
-contract FiatTokenProxy {
-    address public implementation;
-    address public admin;
-
-    constructor(address _implementation) {
-        implementation = _implementation;
-        admin = msg.sender;
-    }
-
-    function changeAdmin(address newAdmin) external {
-        require(msg.sender == admin, "Only admin can change admin");
-        admin = newAdmin;
-    }
-
-    fallback() external payable {
-        address impl = implementation;
-        assembly {
-            let ptr := mload(0x40)
-            calldatacopy(ptr, 0, calldatasize())
-            let result := delegatecall(gas(), impl, ptr, calldatasize(), 0, 0)
-            let size := returndatasize()
-            returndatacopy(ptr, 0, size)
-
-            switch result
-            case 0 { revert(ptr, size) }
-            default { return(ptr, size) }
-        }
-    }
-
-    receive() external payable {}
 }

@@ -76,3 +76,19 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_phone ON auth_tokens(phone_number);
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires ON auth_tokens(expires_at);
+
+-- Pending transfers for recipients not yet linked
+CREATE TABLE IF NOT EXISTS pending_transfers (
+    id SERIAL PRIMARY KEY,
+    token_address VARCHAR(42) NOT NULL,
+    amount NUMERIC(78, 0) NOT NULL,
+    sender_phone VARCHAR(20) NOT NULL,
+    sender_address VARCHAR(42) NOT NULL,
+    recipient_phone VARCHAR(20) NOT NULL,
+    status VARCHAR(20) DEFAULT 'PENDING', -- PENDING | COMPLETED | FAILED
+    tx_hash VARCHAR(80),
+    created_at TIMESTAMP DEFAULT NOW(),
+    processed_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pending_recipient ON pending_transfers(recipient_phone, status);

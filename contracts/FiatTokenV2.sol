@@ -14,10 +14,12 @@ contract FiatTokenV2 is ERC20, Ownable, Pausable {
     address public masterMinter;
     address public pauser;
     address public blacklister;
+    bool public rolesInitialized;
 
     mapping(address => bool) public minters;
     mapping(address => uint256) public minterAllowance;
     mapping(address => bool) public blacklisted;
+    bool public initialMintDone;
 
     event Mint(address indexed minter, address indexed to, uint256 amount);
     event Burn(address indexed burner, uint256 amount);
@@ -155,5 +157,31 @@ contract FiatTokenV2 is ERC20, Ownable, Pausable {
     function unBlacklist(address account) public onlyBlacklister {
         blacklisted[account] = false;
         emit UnBlacklisted(account);
+    }
+
+    // Initialize admin roles and transfer ownership. Callable once by current owner (factory).
+    function initializeRoles(
+        address newMasterMinter,
+        address newPauser,
+        address newBlacklister,
+        address newOwner
+    ) external onlyOwner {
+        require(!rolesInitialized, "FiatToken: roles already initialized");
+        require(newOwner != address(0), "FiatToken: owner is zero");
+        _setMasterMinter(newMasterMinter);
+        _setPauser(newPauser);
+        _setBlacklister(newBlacklister);
+        rolesInitialized = true;
+        _transferOwnership(newOwner);
+    }
+
+    // One-time owner-controlled mint to seed initial supply before handing over ownership.
+    function ownerMintInitial(address to, uint256 amount) external onlyOwner {
+        require(!initialMintDone, "FiatToken: initial mint already done");
+        require(to != address(0), "FiatToken: mint to zero address");
+        require(amount > 0, "FiatToken: amount must be > 0");
+        initialMintDone = true;
+        _mint(to, amount);
+        emit Mint(msg.sender, to, amount);
     }
 }

@@ -5,21 +5,26 @@ const config = require('../config');
 
 class TokenDeployer {
   constructor() {
-    this.provider = config.rpcEndpoint ? new ethers.JsonRpcProvider(config.rpcEndpoint) : null;
-    this.wallet = config.privateKey && this.provider ? new ethers.Wallet(config.privateKey, this.provider) : null;
-
-    this.mode = (config.enableOnchainDeploy && this.provider && this.wallet && config.factoryAddress)
-      ? 'onchain'
-      : 'mock';
-
-    if (this.mode === 'onchain') {
-      const factoryAbi = require('../artifacts/contracts/TokenFactory.sol/TokenFactory.json').abi;
-      this.factory = new ethers.Contract(config.factoryAddress, factoryAbi, this.wallet);
-    }
+    this.config = config;
+    this.factoryAbi = require('../artifacts/contracts/TokenFactory.sol/TokenFactory.json').abi;
   }
 
-  async deployToken(name, symbol, masterMinter, pauser, blacklister, owner) {
-    if (this.mode !== 'onchain') {
+  buildContext(network) {
+    const useMainnet = !network || network === 'celo';
+    const rpc = useMainnet ? this.config.rpcEndpoint : this.config.rpcEndpointSepolia;
+    const factoryAddr = useMainnet ? this.config.factoryAddress : this.config.factoryAddressSepolia;
+    if (!this.config.enableOnchainDeploy || !rpc || !this.config.privateKey || !factoryAddr) {
+      return { mode: 'mock' };
+    }
+    const provider = new ethers.JsonRpcProvider(rpc);
+    const wallet = new ethers.Wallet(this.config.privateKey, provider);
+    const factory = new ethers.Contract(factoryAddr, this.factoryAbi, wallet);
+    return { mode: 'onchain', provider, wallet, factory };
+  }
+
+  async deployToken(name, symbol, masterMinter, pauser, blacklister, owner, network) {
+    const ctx = this.buildContext(network);
+    if (ctx.mode !== 'onchain') {
       // Safe mock response to avoid breaking flows in non-chain envs
       const proxy = `0x${cryptoRandomHex(40)}`;
       const implementation = `0x${cryptoRandomHex(40)}`;
@@ -32,7 +37,7 @@ class TokenDeployer {
     }
 
     // On-chain deployment via TokenFactory
-    const tx = await this.factory.deployToken(
+    const tx = await ctx.factory.deployToken(
       name,
       symbol,
       masterMinter,
@@ -44,7 +49,7 @@ class TokenDeployer {
 
     let proxy, implementation;
     // ethers v6: receipt.logs structured, use iface to parse
-    const iface = this.factory.interface;
+    const iface = ctx.factory.interface;
     for (const log of receipt.logs) {
       try {
         const parsed = iface.parseLog(log);
