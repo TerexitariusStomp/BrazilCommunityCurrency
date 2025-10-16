@@ -397,7 +397,14 @@
           const { data } = await axios.get('/health');
           setHealth(data);
         } catch (e) {
-          setError(e?.response?.data?.error || e.message);
+          const base = (typeof axios !== 'undefined' && axios.defaults && axios.defaults.baseURL) ? axios.defaults.baseURL : '';
+          const sameOrigin = (typeof location !== 'undefined') && (!base || base === location.origin);
+          const onPages = (typeof location !== 'undefined') && /github\.io$/i.test(location.hostname);
+          if (onPages && sameOrigin) {
+            setError(null);
+          } else {
+            setError(e?.response?.data?.error || e.message);
+          }
         } finally { setLoading(false); }
       };
 
@@ -411,6 +418,12 @@
           </div>
 
           {error && <div className="p-3 rounded-lg border border-red-200/60 bg-red-50/70 text-red-700 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800 text-sm">{error}</div>}
+
+          {(!health && !loading && (typeof window !== 'undefined') && /github\.io$/i.test(window.location.hostname) && (!window.API_BASE || window.API_BASE === '')) && (
+            <div className="p-3 rounded-lg border border-amber-200/60 bg-amber-50/70 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800 text-sm">
+              API not configured for GitHub Pages. Set window.API_BASE in public/env.js to your backend URL.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Stat label="API" value={health ? 'Healthy' : (loading ? 'Loading…' : 'Unknown')} sub="/health" />
@@ -1011,5 +1024,8 @@
   </script>
 </body>
 </html>
+
+
+
 
 
