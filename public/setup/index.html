@@ -1,46 +1,22 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Configurar Conta</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-  <script>
-    (function(){ try { if (window.API_BASE) axios.defaults.baseURL = window.API_BASE; } catch(_){} })();
-    function readQuery(k){ const u=new URL(window.location.href); return u.searchParams.get(k)||''; }
-    async function submitRegister(){
-      const out=document.getElementById('status');
-      const phone=(document.getElementById('phone').value||'').trim();
-      if(!phone){ out.textContent='Informe seu número de WhatsApp'; out.className='text-red-700'; return; }
-      try{ await axios.post('/api/whatsapp/register',{ phone }); out.textContent='Conta vinculada ao WhatsApp com sucesso.'; out.className='text-green-700'; }
-      catch(e){ out.textContent=(e.response&&e.response.data&&e.response.data.error)||e.message||'Erro'; out.className='text-red-700'; }
-    }
-    window.addEventListener('DOMContentLoaded',()=>{ const p=readQuery('phone'); if(p) document.getElementById('phone').value=p; });
-  </script>
-  <style>
-    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
-  </style>
-</head>
-<body class="min-h-screen bg-slate-50 text-slate-900">
-  <div class="max-w-xl mx-auto px-4 py-10">
-    <h1 class="text-2xl font-bold mb-6">Configurar Conta</h1>
-    <p class="mb-6 text-slate-600">Conecte seu WhatsApp para enviar e receber moeda comunitária.</p>
-    <div class="space-y-4 bg-white shadow-sm border border-slate-200 rounded-xl p-5">
-      <div>
-        <label class="block text-sm mb-1">Seu WhatsApp (telefone)</label>
-        <input id="phone" placeholder="+55..." class="w-full p-2 border rounded" />
-      </div>
-      <div class="flex items-center gap-3">
-        <button onclick="submitRegister()" class="px-4 py-2 bg-emerald-600 text-white rounded">Salvar</button>
-        <span id="status" class="text-sm"></span>
-      </div>
-      <p class="text-xs text-slate-500">Ao salvar, sua conta será vinculada ao seu WhatsApp.</p>
-    </div>
-    <div class="mt-6">
-      <a href="/" class="text-blue-700">Voltar</a>
-    </div>
-  </div>
-</body>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content="0; url=../#setup" />
+    <title>Redirecting�</title>
+    <script>
+      (function(){
+        var target = '../#setup';
+        try {
+          if (location && location.origin && location.pathname.indexOf('/BrazilCommunityCurrency/') >= 0) {
+            target = location.origin + '/BrazilCommunityCurrency/public/#setup';
+          }
+        } catch(_){}
+        location.replace(target);
+      })();
+    </script>
+  </head>
+  <body>
+    <p>If you are not redirected, <a href="../#setup">click here</a>.</p>
+  </body>
 </html>
-
