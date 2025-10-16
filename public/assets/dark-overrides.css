@@ -1,0 +1,17 @@
+:root{
+  --slate-900:#0f172a; --slate-800:#1e293b; --slate-700:#334155; --slate-600:#475569;
+  --slate-200:#e2e8f0; --slate-100:#f1f5f9;
+}
+/* Force a fully dark palette for common light-only utilities used in markup */
+.dark .bg-white{background-color:rgba(15,23,42,.8)!important}
+.dark .bg-white\/70{background-color:rgba(15,23,42,.7)!important}
+.dark .bg-slate-100{background-color:var(--slate-800)!important}
+.dark .text-slate-900{color:var(--slate-200)!important}
+.dark .border-white\/40{border-color:rgba(226,232,240,.16)!important}
+.dark .from-slate-50,.dark .via-white,.dark .to-slate-100{background-image:linear-gradient(to bottom, #0b1220,#0b1220,#0b1220)!important}
+.dark .shadow{box-shadow:0 1px 2px 0 rgba(0,0,0,.3),0 1px 3px 1px rgba(0,0,0,.25)!important}
+.dark .hover\:bg-slate-100:hover{background-color:var(--slate-700)!important}
+.dark .text-slate-700{color:var(--slate-200)!important}
+.dark .bg-slate-200{background-color:var(--slate-700)!important}
+.dark .bg-slate-100\/70{background-color:rgba(30,41,59,.7)!important}
+
