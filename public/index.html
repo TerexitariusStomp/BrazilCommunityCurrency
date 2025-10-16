@@ -82,7 +82,7 @@
     })();
   </script>
 
-  <script type="text/babel">
+  <script type="text/babel" data-presets="env,react">
     const { useState, useEffect } = React;
 
     // Simple wallet connector inspired by RainbowKit flow
@@ -824,7 +824,7 @@
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 
-  <script type="text/babel">
+  <script type="text/babel" data-presets="env,react">
     const { useState, useEffect } = React;
 
     function PixActions({ initialTokenAddress='' }) {
@@ -913,7 +913,7 @@
   </script>
 
   <!-- Side menu: Dashboard, 🚀 Make Moeda, 🏦 Bank Connect -->
-  <script type="text/babel">
+  <script type="text/babel" data-presets="env,react">
     const { useState, useEffect } = React;
 
     function MakeMoeda() {
@@ -1024,6 +1024,8 @@
   </script>
 </body>
 </html>
+
+
 
 
 
