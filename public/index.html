@@ -358,7 +358,7 @@
                 <NavItem label="Dashboard" icon="🏠" active={active==='dashboard'} onClick={() => setActive('dashboard')} />
                 <NavItem label="Make Moeda" icon="🚀" active={active==='deploy'} onClick={() => setActive('deploy')} />
                 <NavItem label="Bank Connect" icon="🏦" active={active==='bank'} onClick={() => setActive('bank')} />
-                <a href="/setup" className="flex items-center w-full px-3 py-2 rounded-lg text-sm transition shadow-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100/70 dark:hover:bg-slate-800/50"><span className="mr-2">🔗</span>Account Setup</a>
+                <button onClick={() => setActive('setup')} className="flex items-center w-full px-3 py-2 rounded-lg text-sm transition shadow-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100/70 dark:hover:bg-slate-800/50"><span className="mr-2">??</span>Account Setup</button>
               </div>
               {notice && (
                 <div className="mt-4 p-3 rounded-lg text-sm border border-blue-200/60 bg-blue-50/70 text-blue-800 dark:text-blue-200 dark:bg-blue-900/20 dark:border-blue-800">{notice}</div>
@@ -369,6 +369,7 @@
               {active === 'dashboard' && <Dashboard />}
               {active === 'deploy' && <DeployToken onNotice={setNotice} />}
               {active === 'bank' && <BankConnect onNotice={setNotice} />}
+              {active === 'setup' && <AccountSetup onNotice={setNotice} />}
             </main>
           </div>
         </div>
@@ -409,10 +410,10 @@
             <button onClick={load} className="px-3 py-1.5 text-sm rounded-md bg-slate-900 text-white hover:bg-slate-800">Refresh</button>
           </div>
 
-          {error && <div className="p-3 rounded-lg border border-red-200/60 bg-red-50/70 text-red-700 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800 text-sm">{error}</div>}
+\ \ \ \ \ \ \ \ \ \ \{error\ &&\ <div\ className="p-3\ rounded-lg\ border\ border-red-200/60\ bg-red-50/70\ text-red-700\ dark:bg-red-900/20\ dark:text-red-200\ dark:border-red-800\ text-sm">\{error}</div>}\n\ \ \ \ \ \ \ \ \ \ \{\(!health\ &&\ !loading\ &&\ /github\.io\$/i\.test\(window\.location\.hostname\)\ &&\ \(!window\.API_BASE\ \|\|\ window\.API_BASE\ ===\ ''\)\)\ &&\ \(\n\ \ \ \ \ \ \ \ \ \ \ \ <div\ className="p-3\ rounded-lg\ border\ border-amber-200/60\ bg-amber-50/70\ text-amber-800\ dark:bg-amber-900/20\ dark:text-amber-200\ dark:border-amber-800\ text-sm">\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ API\ not\ configured\ for\ GitHub\ Pages\.\ Set\ window\.API_BASE\ in\ public/env\.js\ to\ your\ backend\ URL\.\n\ \ \ \ \ \ \ \ \ \ \ \ </div>\n\ \ \ \ \ \ \ \ \ \ \)}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Stat label="API" value={health ? 'Healthy' : (loading ? 'Loading…' : 'Unknown')} sub="/health" />
+            <Stat label="API" value={health ? 'Healthy' : (loading ? 'Loading�' : (window.API_BASE ? 'Unreachable' : 'Not Configured'))} sub="/health" />
             <Stat label="WhatsApp" value={health?.services?.whatsapp ? 'Active' : 'Disabled'} />
             <Stat label="Pluggy" value={health?.services?.pluggy ? 'Active' : 'Disabled'} />
             <Stat label="Network" value={window.location.origin} />
@@ -729,6 +730,40 @@
     }
 
     function BankConnect({ onNotice }) {
+
+    function AccountSetup({ onNotice }) {
+      const [phone, setPhone] = React.useState("");
+      const [loading, setLoading] = React.useState(false);
+      const [status, setStatus] = React.useState("");
+      const [error, setError] = React.useState(null);
+      const submit = async (e) => {
+        e.preventDefault(); setLoading(true); setError(null); setStatus("");
+        try {
+          if (!phone) throw new Error("Enter your WhatsApp phone e.g. +55...");
+          await axios.post("/api/whatsapp/register", { phone });
+          setStatus("WhatsApp linked successfully."); onNotice?.("WhatsApp linked");
+        } catch (err) {
+          setError(err?.response?.data?.error || err.message);
+        } finally { setLoading(false); }
+      };
+      return (
+        <div className="space-y-6">
+          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white drop-shadow-sm">Account Setup</h2>
+          <form onSubmit={submit} className="backdrop-blur bg-white/70 dark:bg-slate-900/50 border border-white/40 dark:border-slate-800 rounded-xl p-5 space-y-4 shadow-sm">
+            <div>
+              <label className="block text-sm text-slate-600 dark:text-slate-300 mb-1">Your WhatsApp (phone)</label>
+              <input value={phone} onChange={(e)=>setPhone(e.target.value)} placeholder="+55..." className="w-full rounded-md px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="flex items-center gap-3">
+              <button disabled={loading} className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50 shadow">{loading ? "Saving..." : "Save"}</button>
+              {error && <span className="text-sm text-red-600 dark:text-red-300">{error}</span>}
+              {status && <span className="text-sm text-green-700 dark:text-green-300">{status}</span>}
+            </div>
+            <p className="text-xs text-slate-500">After saving, your account will be linked to your WhatsApp.</p>
+          </form>
+        </div>
+      );
+    }
       const [address, setAddress] = useState('');
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState(null);
@@ -977,3 +1012,7 @@
   </script>
 </body>
 </html>
+
+
+
+
