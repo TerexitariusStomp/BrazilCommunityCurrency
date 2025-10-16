@@ -63,8 +63,8 @@ describe("BankBackedToken", function () {
   it("Should reject mint from non-admin even if minter", async function () {
     const [, , , , attacker] = await ethers.getSigners();
     // MasterMinter is `minter` per constructor; attacker cannot be configured due to restriction
-    await expect(token.connect(attacker).configureMinter(attacker.address, 1000)).to.be.revertedWith(
-      'Only mintAdmin can be a minter'
-    );
+    await expect(
+      token.connect(attacker).configureMinter(attacker.address, 1000)
+    ).to.be.revertedWith('FiatToken: caller is not the masterMinter');
   });
 });
