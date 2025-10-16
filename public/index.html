@@ -821,7 +821,13 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    // Delay mount until DOM is ready to ensure all components/scripts are loaded
+    window.addEventListener('DOMContentLoaded', function () {
+      var rootEl = document.getElementById('root');
+      if (rootEl && window.ReactDOM) {
+        window.ReactDOM.createRoot(rootEl).render(React.createElement(App));
+      }
+    });
   </script>
 
   <script type="text/babel" data-presets="env,react">
