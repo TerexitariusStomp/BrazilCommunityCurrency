@@ -10,7 +10,9 @@
     "deploy": "hardhat run scripts/deploy.js",
     "test": "hardhat test",
     "build": "node scripts/build.js",
-    "serve:public": "node scripts/servePublic.js"
+    "serve:public": "node scripts/servePublic.js",
+    "build:frontend": "node scripts/build-frontend.js",
+    "vercel-build": "npm run build:frontend"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.9.0",
@@ -27,6 +29,7 @@
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@types/node": "^20.10.0",
     "dotenv": "^16.3.1",
+    "esbuild": "^0.25.11",
     "nodemon": "^3.0.2"
   },
   "keywords": [
