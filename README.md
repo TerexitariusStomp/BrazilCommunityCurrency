@@ -199,6 +199,13 @@ docker run --rm -p 8080:80 \
   community-frontend
 ```
 
+## GitHub Pages
+
+- This repo is configured to deploy the frontend in `public/` to GitHub Pages via a workflow at `.github/workflows/pages.yml`.
+- On push to `main` or `master`, the workflow publishes `public/` as a static site. GitHub Pages should be set to “GitHub Actions” as the source.
+- Before publishing, set your API endpoint and WalletConnect project id in `public/env.js` (see `public/env.example.js`). If `window.API_BASE` is left blank, the app will default to same-origin, which is typically not where your API runs when hosted on Pages.
+- If you use a custom domain, add your `CNAME` file to `public/` so it is included in the deployed site.
+
 ## System Architecture
 
 ### Five-Layer Design
