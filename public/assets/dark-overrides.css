@@ -15,3 +15,10 @@
 .dark .bg-slate-200{background-color:var(--slate-700)!important}
 .dark .bg-slate-100\/70{background-color:rgba(30,41,59,.7)!important}
 
+/* Broad fallbacks: catch any remaining light utilities by substring */
+.dark [class*="bg-white"]{background-color:rgba(15,23,42,.85)!important}
+.dark [class*="text-slate-900"]{color:var(--slate-200)!important}
+.dark [class*="border-white"]{border-color:rgba(226,232,240,.18)!important}
+.dark [class*="from-slate-50"],
+.dark [class*="via-white"],
+.dark [class*="to-slate-100"]{background-image:linear-gradient(to bottom,#0b1220,#0b1220,#0b1220)!important}
