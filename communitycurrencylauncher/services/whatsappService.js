@@ -3,6 +3,7 @@ const { Pool } = require('pg');
 const { ethers } = require('ethers');
 const config = require('../config');
 const twilioWhatsApp = require('./twilioWhatsApp');
+let PrivyClient = null; try { ({ PrivyClient } = require('@privy-io/server-auth')); } catch (_) {}
 
 class WhatsAppService extends EventEmitter {
     constructor() {
@@ -27,6 +28,10 @@ class WhatsAppService extends EventEmitter {
         }
         // No private key storage: do not persist or derive secrets server-side.
         // Any signing keys must be provided via process.env and never written to DB.
+        // Initialize Privy server client (for user + wallet lifecycle, no keys handled here)
+        this.privy = (PrivyClient && config.privy && config.privy.appId && config.privy.appSecret)
+          ? new PrivyClient(config.privy.appId, config.privy.appSecret)
+          : null;
     }
 
     buildLink(path, params = {}) {
@@ -296,6 +301,29 @@ Digite o número da opção desejada`;
     }
 
     async registerUser(phoneNumber) {
+        // Ensure Privy user + embedded wallet exists (no keys handled or stored here)
+        if (this.privy) {
+            try {
+                const list = await this.privy.getUsers({ phoneNumbers: [phoneNumber] });
+                let user = list?.[0] || null;
+                if (!user) {
+                    user = await this.privy.importUser({ linkedAccounts: [{ type: 'phone', address: phoneNumber }], createEmbeddedWallet: true });
+                }
+                try { await this.privy.createWallets({ userId: user.id, createEthereumWallet: true, numberOfEthereumWalletsToCreate: 1 }); } catch (_) {}
+                const refreshed = await this.privy.getUser({ id: user.id }).catch(() => user);
+                const evm = (refreshed?.wallets || []).find(w => w.chainType === 'ethereum');
+                if (evm && this.db) {
+                    const userId = `user_${phoneNumber}`;
+                    await this.db.query('INSERT INTO users (privy_user_id, phone_number) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, phoneNumber]);
+                    const r = await this.db.query('SELECT id FROM wallets WHERE phone = $1 LIMIT 1', [phoneNumber]);
+                    if (r.rows.length) {
+                        await this.db.query('UPDATE wallets SET address = $1 WHERE phone = $2', [evm.address, phoneNumber]);
+                    } else {
+                        await this.db.query('INSERT INTO wallets (user_id, address, auth_method, auth_value, phone) VALUES ($1, $2, $3, $4, $5)', [userId, evm.address, 'phone', phoneNumber, phoneNumber]);
+                    }
+                }
+            } catch (_) { /* ignore errors; fallback to DB-only user row */ }
+        }
         // Self-custodial: create user record; wallet is linked when user sends 0x address
         const wallet = {
             userId: `user_${phoneNumber}`,

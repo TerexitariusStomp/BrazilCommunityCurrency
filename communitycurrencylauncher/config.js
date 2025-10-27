@@ -24,6 +24,12 @@ module.exports = {
     webhookSecret: assertEnv('PLUGGY_WEBHOOK_SECRET', { required: false }),
   },
 
+  // Privy (embedded wallets / custodial)
+  privy: {
+    appId: assertEnv('PRIVY_APP_ID', { required: false }),
+    appSecret: assertEnv('PRIVY_APP_SECRET', { required: false }),
+  },
+
   // Blockchain
   rpcEndpoint: assertEnv('RPC_ENDPOINT', { required: false }),
   rpcEndpointSepolia: assertEnv('RPC_ENDPOINT_SEPOLIA', { required: false, default: 'https://forno.celo-sepolia.celo-testnet.org' }),

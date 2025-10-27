@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.9.0",
+    "@privy-io/server-auth": "^1.10.0",
     "axios": "^1.12.2",
     "cors": "^2.8.5",
     "ethers": "^6.15.0",
@@ -45,4 +46,3 @@
   "author": "",
   "license": "MIT"
 }
-
