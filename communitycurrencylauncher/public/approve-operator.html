@@ -48,6 +48,30 @@
         const factoryAbi = [
           'function deployments(uint256) view returns (address tokenAddress, string name, string symbol, address deployer, uint256 deployedAt)'
         ];
+        async function getDeploymentCount(factory){
+          // Exponential probe to find upper bound, then binary search for last index
+          let lo = -1, hi = 1;
+          // Cap to avoid runaway in case of non-reverting getter
+          const HARD_CAP = 50000;
+          try{
+            // If index 0 reverts, return 0
+            await factory.deployments(0);
+          }catch(_){ return 0; }
+          lo = 0;
+          while (true){
+            if (hi > HARD_CAP) { hi = HARD_CAP; break; }
+            try { await factory.deployments(hi); lo = hi; hi = hi * 2; }
+            catch(_){ break; }
+          }
+          // Binary search (lo is valid, hi might be invalid)
+          let L = lo, R = hi;
+          while (L + 1 < R){
+            const mid = (L + R) >> 1;
+            try { await factory.deployments(mid); L = mid; }
+            catch(_){ R = mid; }
+          }
+          return L + 1;
+        }
         const status = document.getElementById('status');
         function setStatus(m){ status.textContent = m; }
 
@@ -93,15 +117,14 @@
             const factoryAddr = (window.CELO_FACTORY_ADDRESS||'').trim();
             if (!/^0x[a-fA-F0-9]{40}$/.test(factoryAddr)) { setStatus('Factory inválida no env.js'); return; }
             const f = new ethers.Contract(factoryAddr, factoryAbi, readProvider);
-            // scan first 100 deployments
+            setStatus('Procurando token...');
             let found = null;
-            for (let i=0;i<100;i++){
-              try{
-                const d = await f.deployments(i);
-                const n = String(d.name||'');
-                const s = String(d.symbol||'');
-                if (n.toLowerCase()===v.toLowerCase() || s.toLowerCase()===v.toLowerCase()) { found = d.tokenAddress; break; }
-              }catch(e){ break; }
+            const count = await getDeploymentCount(f);
+            for (let i=0;i<count;i++){
+              const d = await f.deployments(i);
+              const n = String(d.name||'');
+              const s = String(d.symbol||'');
+              if (n.toLowerCase()===v.toLowerCase() || s.toLowerCase()===v.toLowerCase()) { found = d.tokenAddress; break; }
             }
             if (found){ token = found; setStatus('Token encontrado: '+token); renderDetails(); }
             else setStatus('Token não encontrado nos primeiros 100 deployments');
