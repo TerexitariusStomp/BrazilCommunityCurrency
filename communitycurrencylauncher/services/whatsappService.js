@@ -372,7 +372,10 @@ Digite o número da opção desejada`;
         }
 
         const token = new ethers.Contract(tokenAddress, this.tokenAbi, this.operator);
-        const decimals = await token.decimals();
+        const [decimals, symbol] = await Promise.all([
+          token.decimals().catch(()=>18),
+          token.symbol?.().catch(()=>"TOKEN")
+        ]);
         const amt = ethers.parseUnits(String(amount), decimals);
         // Determine recipient: linked wallet or counterfactual address derived from phone number
         const target = (toWallet && toWallet.address) ? toWallet.address : this.deriveCounterfactualAddress(toPhone);
@@ -383,6 +386,13 @@ Digite o número da opção desejada`;
         if (allowance < amt) throw new Error('Permissão insuficiente');
         const tx = await token.transferFrom(fromWallet.address, target, amt);
         const receipt = await tx.wait();
+        // Success notification to recipient via WhatsApp (best-effort)
+        try {
+          if (twilioWhatsApp.isConfigured()) {
+            const human = Number(amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+            await twilioWhatsApp.sendWhatsApp(toPhone, `Você recebeu ${human} ${symbol} de ${fromPhone}. Hash: ${(receipt?.hash || tx?.hash || '0x')}`);
+          }
+        } catch (_) {}
         return { txHash: receipt?.hash || tx?.hash || '0x' };
     }
 

@@ -15,6 +15,15 @@
       <h1 class="text-2xl font-semibold mb-4">Aprovar Operador</h1>
       <p class="opacity-80 mb-3">Conceda permissão para que o operador envie tokens em seu nome (uma única vez). Você pode revogar depois no contrato do token.</p>
       <div id="details" class="p-4 rounded bg-slate-800 mb-4"></div>
+      <div class="p-4 rounded bg-slate-800 mb-4">
+        <label class="block text-sm opacity-80 mb-1">Token (nome, símbolo ou endereço)</label>
+        <input id="tokenInput" class="w-full p-2 rounded text-slate-900" placeholder="Ex.: BRL, BRLC, 0x..." />
+        <div class="text-xs opacity-70 mt-1">Se não souber o endereço, digite o nome/símbolo e clique em "Localizar Token".</div>
+        <div class="mt-2 flex gap-2">
+          <button id="resolve" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded">Localizar Token</button>
+          <button id="useAddress" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded">Usar Endereço</button>
+        </div>
+      </div>
       <div class="flex gap-2 mb-3">
         <button id="connect" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">Conectar Carteira</button>
         <button id="approve" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded" disabled>Aprovar Ilimitado</button>
@@ -24,7 +33,7 @@
     <script>
       (function(){
         const qs = new URLSearchParams(location.search);
-        const token = (qs.get('token')||'').trim();
+        let token = (qs.get('token')||'').trim();
         const operator = (qs.get('operator')||'').trim();
         const details = document.getElementById('details');
         function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
@@ -36,10 +45,14 @@
         const erc20Abi = [
           'function approve(address spender, uint256 value) returns (bool)'
         ];
+        const factoryAbi = [
+          'function deployments(uint256) view returns (address tokenAddress, string name, string symbol, address deployer, uint256 deployedAt)'
+        ];
         const status = document.getElementById('status');
         function setStatus(m){ status.textContent = m; }
 
         let browserProvider=null, signer=null;
+        const readProvider = new ethers.JsonRpcProvider('https://forno.celo.org');
         async function connect(){
           try{
             if (window.ethereum){
@@ -72,10 +85,47 @@
           }catch(e){ setStatus('Erro: '+(e&&e.message||e)); }
         }
 
+        async function resolveToken(){
+          try{
+            const v = (document.getElementById('tokenInput').value||'').trim();
+            if (!v) { setStatus('Digite nome, símbolo ou endereço'); return; }
+            if (/^0x[a-fA-F0-9]{40}$/.test(v)) { token = v; setStatus('Token definido: '+token); renderDetails(); return; }
+            const factoryAddr = (window.CELO_FACTORY_ADDRESS||'').trim();
+            if (!/^0x[a-fA-F0-9]{40}$/.test(factoryAddr)) { setStatus('Factory inválida no env.js'); return; }
+            const f = new ethers.Contract(factoryAddr, factoryAbi, readProvider);
+            // scan first 100 deployments
+            let found = null;
+            for (let i=0;i<100;i++){
+              try{
+                const d = await f.deployments(i);
+                const n = String(d.name||'');
+                const s = String(d.symbol||'');
+                if (n.toLowerCase()===v.toLowerCase() || s.toLowerCase()===v.toLowerCase()) { found = d.tokenAddress; break; }
+              }catch(e){ break; }
+            }
+            if (found){ token = found; setStatus('Token encontrado: '+token); renderDetails(); }
+            else setStatus('Token não encontrado nos primeiros 100 deployments');
+          }catch(e){ setStatus('Erro ao localizar: '+(e&&e.message||e)); }
+        }
+
+        function useAddress(){
+          const v = (document.getElementById('tokenInput').value||'').trim();
+          if (!/^0x[a-fA-F0-9]{40}$/.test(v)) { setStatus('Informe um endereço 0x válido'); return; }
+          token = v; setStatus('Token definido: '+token); renderDetails();
+        }
+
+        function renderDetails(){
+          details.innerHTML = '<div class="space-y-1">'
+            + '<div><span class="opacity-70">Token</span> <code class="text-emerald-300">'+esc(token)+'</code></div>'
+            + '<div><span class="opacity-70">Operador</span> <code class="text-emerald-300">'+esc(operator)+'</code></div>'
+            + '</div>';
+        }
+
         document.getElementById('connect').addEventListener('click', connect);
         document.getElementById('approve').addEventListener('click', approve);
+        document.getElementById('resolve').addEventListener('click', resolveToken);
+        document.getElementById('useAddress').addEventListener('click', useAddress);
       })();
     </script>
   </body>
   </html>
-
