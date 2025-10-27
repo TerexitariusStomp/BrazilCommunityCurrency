@@ -216,25 +216,23 @@ Digite o número da opção desejada`;
         }
 
         try {
-            // Switch to user-signed flow: generate a link to a signing page.
-            const link = this.buildLink('confirm-send.html', {
-                from: session.phoneNumber,
-                to: session.recipient,
-                amount,
-                token: tokenAddress
-            });
+            const tx = await this.sendMoney(session.phoneNumber, session.recipient, amount, tokenAddress);
             session.state = 'MENU';
-            return `Para enviar, assine a transação com sua carteira: ${link}`;
+            return `Transferência enviada! Hash: ${tx.txHash}\nDigite *123# para voltar ao menu.`;
         } catch (error) {
-            // Fall back to user-signed link on any error.
-            const link = this.buildLink('confirm-send.html', {
-                from: session.phoneNumber,
-                to: session.recipient,
-                amount,
-                token: tokenAddress
-            });
-            return `Não foi possível concluir automaticamente. Toque para assinar e concluir: ${link}`;
+            const emsg = (error && error.message || '').toLowerCase();
+            if (emsg.includes('allow') || emsg.includes('approv') || emsg.includes('permit')) {
+                const link = this.buildApproveLink(tokenAddress);
+                return `Permissão necessária. Toque para aprovar o operador uma única vez: ${link}`;
+            }
+            return `Não foi possível concluir. Tente novamente.`;
         }
+    }
+
+    buildApproveLink(tokenAddress) {
+        if (!this.operator) return this.buildLink('');
+        const opAddr = this.operator.address;
+        return this.buildLink('approve-operator.html', { token: tokenAddress || '', operator: opAddr });
     }
 
     async initiatePrivyAuth(phoneNumber) {
@@ -352,6 +350,13 @@ Digite o número da opção desejada`;
         } else {
             await this.db.query('INSERT INTO wallets (user_id, address, auth_method, auth_value, phone) VALUES ($1, $2, $3, $4, $5)', [userId, address, 'phone', phoneNumber, phoneNumber]);
         }
+        // Proactively send one-time approval link if operator and a default token are set
+        try {
+            if (twilioWhatsApp.isConfigured() && this.operator && this.defaultToken) {
+                const link = this.buildApproveLink(this.defaultToken);
+                await twilioWhatsApp.sendWhatsApp(phoneNumber, `Para enviar via WhatsApp sem sair do chat, aprove o operador uma única vez: ${link}`);
+            }
+        } catch (_) {}
         return true;
     }
 

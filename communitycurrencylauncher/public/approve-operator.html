@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aprovar Operador</title>
+    <link rel="stylesheet" href="assets/tailwind.css" />
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
+    <script src="vendor/walletconnect-ethereum-provider/index.umd.js"></script>
+    <script src="env.js"></script>
+    <style> body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial} </style>
+  </head>
+  <body class="bg-slate-900 text-slate-100">
+    <div class="max-w-xl mx-auto p-6">
+      <h1 class="text-2xl font-semibold mb-4">Aprovar Operador</h1>
+      <p class="opacity-80 mb-3">Conceda permissão para que o operador envie tokens em seu nome (uma única vez). Você pode revogar depois no contrato do token.</p>
+      <div id="details" class="p-4 rounded bg-slate-800 mb-4"></div>
+      <div class="flex gap-2 mb-3">
+        <button id="connect" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">Conectar Carteira</button>
+        <button id="approve" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded" disabled>Aprovar Ilimitado</button>
+      </div>
+      <div id="status" class="text-sm opacity-90 min-h-[1.5rem]"></div>
+    </div>
+    <script>
+      (function(){
+        const qs = new URLSearchParams(location.search);
+        const token = (qs.get('token')||'').trim();
+        const operator = (qs.get('operator')||'').trim();
+        const details = document.getElementById('details');
+        function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+        details.innerHTML = '<div class="space-y-1">'
+          + '<div><span class="opacity-70">Token</span> <code class="text-emerald-300">'+esc(token)+'</code></div>'
+          + '<div><span class="opacity-70">Operador</span> <code class="text-emerald-300">'+esc(operator)+'</code></div>'
+          + '</div>';
+
+        const erc20Abi = [
+          'function approve(address spender, uint256 value) returns (bool)'
+        ];
+        const status = document.getElementById('status');
+        function setStatus(m){ status.textContent = m; }
+
+        let browserProvider=null, signer=null;
+        async function connect(){
+          try{
+            if (window.ethereum){
+              browserProvider = new ethers.BrowserProvider(window.ethereum);
+              await browserProvider.send('eth_requestAccounts',[]);
+            } else if (window.WalletConnectEthereumProvider){
+              const chainId = 42220; // CELO mainnet
+              const WC = window.WalletConnectEthereumProvider;
+              const wc = await WC.init({ projectId:(window.WC_PROJECT_ID||'demo'), chains:[chainId], showQrModal:true });
+              await wc.connect();
+              browserProvider = new ethers.BrowserProvider(wc);
+            } else { setStatus('Nenhuma carteira detectada.'); return; }
+            signer = await browserProvider.getSigner();
+            const addr = await signer.getAddress();
+            setStatus('Conectado: '+addr);
+            document.getElementById('approve').disabled=false;
+          }catch(e){ setStatus('Falha ao conectar: '+(e&&e.message||e)); }
+        }
+
+        async function approve(){
+          try{
+            if (!signer) { setStatus('Conecte sua carteira'); return; }
+            if (!/^0x[a-fA-F0-9]{40}$/.test(token) || !/^0x[a-fA-F0-9]{40}$/.test(operator)) { setStatus('Parâmetros inválidos'); return; }
+            const c = new ethers.Contract(token, erc20Abi, signer);
+            setStatus('Assinando aprovação ilimitada...');
+            const tx = await c.approve(operator, ethers.MaxUint256);
+            setStatus('Aguardando confirmação...');
+            const rc = await tx.wait();
+            const h = (rc&&rc.hash)||tx.hash; setStatus('Aprovado! Tx: '+h);
+          }catch(e){ setStatus('Erro: '+(e&&e.message||e)); }
+        }
+
+        document.getElementById('connect').addEventListener('click', connect);
+        document.getElementById('approve').addEventListener('click', approve);
+      })();
+    </script>
+  </body>
+  </html>
+

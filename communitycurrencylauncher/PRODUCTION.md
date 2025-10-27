@@ -14,6 +14,10 @@ Production Readiness Notes
 - Twilio WhatsApp
   - Env vars (generic names preferred): `ACCOUNT_SID`, `AUTH_TOKEN`, `PHONE_NUMBER`
   - Legacy names still supported: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
+  - WhatsApp UX keeps users in-chat. For self-custodial users, do a one-time approval of the operator:
+    - Link sent to `approve-operator.html?token=...&operator=...` (in-app browser).
+    - After approval, sends can be initiated in chat and executed on-chain by the operator via `transferFrom`.
+    - No private keys are stored; operator key is env-only, users control their wallets.
 
 - Server-initiated transfers (optional)
   - To enable WhatsApp-initiated transfers without storing any private keys, set `PRIVATE_KEY` via environment only.
