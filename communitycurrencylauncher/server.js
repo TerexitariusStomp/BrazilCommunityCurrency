@@ -130,7 +130,7 @@ app.post('/twilio/whatsapp', async (req, res) => {
         const signature = req.get('x-twilio-signature');
         const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
         const params = req.body;
-        const token = process.env.TWILIO_AUTH_TOKEN || (config.twilio && config.twilio.authToken);
+        const token = process.env.AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN || (config.twilio && config.twilio.authToken);
         if (!token) return res.status(500).send('Twilio not configured');
         const valid = require('twilio').validateRequest(token, signature, url, params);
         if (!valid) return res.status(403).send('Invalid request');

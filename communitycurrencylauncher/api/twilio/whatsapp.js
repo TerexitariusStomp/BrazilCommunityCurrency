@@ -6,7 +6,7 @@ module.exports = async (req, res) => {
     const signature = req.headers['x-twilio-signature'];
     const url = absoluteUrl(req);
     const params = await parseBody(req); // x-www-form-urlencoded expected
-    const token = process.env.TWILIO_AUTH_TOKEN;
+    const token = process.env.AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN;
     if (!token) return res.status(500).send('Twilio not configured');
     const valid = require('twilio').validateRequest(token, signature, url, params);
     if (!valid) return res.status(403).send('Invalid request');
@@ -32,4 +32,3 @@ module.exports = async (req, res) => {
     return res.status(200).send(twiml.toString());
   }
 };
-

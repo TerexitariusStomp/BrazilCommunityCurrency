@@ -37,9 +37,10 @@ module.exports = {
 
   // Twilio SMS (for SMS-based UX)
   twilio: {
-    accountSid: assertEnv('TWILIO_ACCOUNT_SID', { required: false }),
-    authToken: assertEnv('TWILIO_AUTH_TOKEN', { required: false }),
-    phoneNumber: assertEnv('TWILIO_PHONE_NUMBER', { required: false }),
+    // Prefer generic Twilio var names if provided; fall back to legacy TWILIO_*
+    accountSid: assertEnv('ACCOUNT_SID', { required: false }) || assertEnv('TWILIO_ACCOUNT_SID', { required: false }),
+    authToken: assertEnv('AUTH_TOKEN', { required: false }) || assertEnv('TWILIO_AUTH_TOKEN', { required: false }),
+    phoneNumber: assertEnv('PHONE_NUMBER', { required: false }) || assertEnv('TWILIO_PHONE_NUMBER', { required: false }),
   },
 
   // (removed SMS ODIS demo)

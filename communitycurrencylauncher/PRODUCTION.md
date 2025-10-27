@@ -11,6 +11,10 @@ Production Readiness Notes
   - Basic input validation on REST endpoints.
   - Add a reverse proxy (NGINX/Caddy) for TLS termination and request buffering.
 
+- Twilio WhatsApp
+  - Env vars (generic names preferred): `ACCOUNT_SID`, `AUTH_TOKEN`, `PHONE_NUMBER`
+  - Legacy names still supported: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
+
 - Blockchain deployment
   - Default token deployer runs in safe mock mode unless `ENABLE_ONCHAIN_DEPLOY=true` and env is complete.
   - Real on-chain deploy uses `artifacts/contracts/TokenFactory.sol/TokenFactory.json` at `FACTORY_ADDRESS`.
