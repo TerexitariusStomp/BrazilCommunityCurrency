@@ -211,21 +211,24 @@ Digite o número da opção desejada`;
         }
 
         try {
-            const tx = await this.sendMoney(session.phoneNumber, session.recipient, amount, tokenAddress);
+            // Switch to user-signed flow: generate a link to a signing page.
+            const link = this.buildLink('confirm-send.html', {
+                from: session.phoneNumber,
+                to: session.recipient,
+                amount,
+                token: tokenAddress
+            });
             session.state = 'MENU';
-            return `Transferência enviada! Hash: ${tx.txHash}\nDigite *123# para voltar ao menu.`;
+            return `Para enviar, assine a transação com sua carteira: ${link}`;
         } catch (error) {
-            // If error mentions allowance, provide a confirmation link without web3 jargon
-            if ((error.message || '').toLowerCase().includes('permiss') || (error.message || '').toLowerCase().includes('approve')) {
-                const link = this.buildLink('confirm-send', {
-                    from: session.phoneNumber,
-                    to: session.recipient,
-                    amount,
-                    token: tokenAddress
-                });
-                return `Confirmação necessária. Toque para concluir o envio: ${link}`;
-            }
-            return `Não foi possível concluir. Tente novamente ou use o link de confirmação se disponível.`;
+            // Fall back to user-signed link on any error.
+            const link = this.buildLink('confirm-send.html', {
+                from: session.phoneNumber,
+                to: session.recipient,
+                amount,
+                token: tokenAddress
+            });
+            return `Não foi possível concluir automaticamente. Toque para assinar e concluir: ${link}`;
         }
     }
 
