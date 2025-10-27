@@ -37,7 +37,8 @@ Production Readiness Notes
   - Note: This app’s Express server (`server.js`) reads envs at runtime. If deploying on Vercel, run it as a server (Serverless/Edge Functions) or deploy the API separately; the current `vercel.json` is configured for static build of `public/` only.
 
 - Data services
-  - Postgres via `DATABASE_URL` (WhatsApp sessions/auth + wallets/users).
+  - Postgres via `DATABASE_URL` stores only non-sensitive data (sessions, auth tokens, public wallet addresses, token metadata). No private keys are stored.
+  - Any signing keys (e.g., `PRIVATE_KEY`, `ORACLE_UPDATE_KEY`) must be provided via environment variables and are never persisted to the database.
 
 - Docker
   - `docker compose up --build` starts API + Postgres.

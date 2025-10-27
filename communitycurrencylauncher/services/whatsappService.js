@@ -1,7 +1,6 @@
 const EventEmitter = require('events');
 const { Pool } = require('pg');
 const { ethers } = require('ethers');
-const crypto = require('crypto');
 const config = require('../config');
 const twilioWhatsApp = require('./twilioWhatsApp');
 
@@ -17,8 +16,8 @@ class WhatsAppService extends EventEmitter {
             this.tokenAbi = null;
         }
         this.provider = config.rpcEndpoint ? new ethers.JsonRpcProvider(config.rpcEndpoint) : null;
-        this.secretKey = process.env.WALLET_SECRET_KEY || null; // 32-byte secret recommended
-        if (this.db) this.ensureSecretsTable().catch(() => {});
+        // No private key storage: do not persist or derive secrets server-side.
+        // Any signing keys must be provided via process.env and never written to DB.
     }
 
     buildLink(path, params = {}) {
@@ -52,49 +51,7 @@ class WhatsAppService extends EventEmitter {
         return ethers.getAddress('0x' + h.slice(-40));
     }
 
-    async ensureSecretsTable() {
-        await this.db.query(`
-          CREATE TABLE IF NOT EXISTS wallet_secrets (
-            address VARCHAR(42) PRIMARY KEY,
-            enc_key TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT NOW()
-          );
-        `);
-    }
-
-    encrypt(pk) {
-        try {
-            if (!this.secretKey) return `plain:${pk}`;
-            const key = Buffer.from(this.secretKey.padEnd(32, '0')).subarray(0, 32);
-            const iv = crypto.randomBytes(12);
-            const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-            const enc = Buffer.concat([cipher.update(pk, 'utf8'), cipher.final()]);
-            const tag = cipher.getAuthTag();
-            return `gcm:${iv.toString('base64')}:${tag.toString('base64')}:${enc.toString('base64')}`;
-        } catch {
-            return `plain:${pk}`;
-        }
-    }
-
-    decrypt(enc) {
-        try {
-            if (!enc || typeof enc !== 'string') return null;
-            if (enc.startsWith('plain:')) return enc.slice(6);
-            if (!this.secretKey) return null;
-            const [pref, ivB64, tagB64, dataB64] = enc.split(':');
-            if (pref !== 'gcm') return null;
-            const key = Buffer.from(this.secretKey.padEnd(32, '0')).subarray(0, 32);
-            const iv = Buffer.from(ivB64, 'base64');
-            const tag = Buffer.from(tagB64, 'base64');
-            const data = Buffer.from(dataB64, 'base64');
-            const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-            decipher.setAuthTag(tag);
-            const dec = Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
-            return dec;
-        } catch {
-            return null;
-        }
-    }
+    // Removed encrypt/decrypt and any wallet_secrets persistence to avoid handling sensitive key material.
 
     async handleWhatsApp(sessionId, phoneNumber, text) {
         phoneNumber = this.normalizePhoneNumber(phoneNumber);
