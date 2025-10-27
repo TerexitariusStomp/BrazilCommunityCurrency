@@ -16,6 +16,15 @@ class WhatsAppService extends EventEmitter {
             this.tokenAbi = null;
         }
         this.provider = config.rpcEndpoint ? new ethers.JsonRpcProvider(config.rpcEndpoint) : null;
+        // Operator signer for server-initiated transferFrom (env-only; never persisted)
+        try {
+            const pk = config.privateKey;
+            this.operator = (this.provider && typeof pk === 'string' && /^0x[0-9a-fA-F]{64}$/.test(pk))
+              ? new ethers.Wallet(pk, this.provider)
+              : null;
+        } catch (_) {
+            this.operator = null;
+        }
         // No private key storage: do not persist or derive secrets server-side.
         // Any signing keys must be provided via process.env and never written to DB.
     }

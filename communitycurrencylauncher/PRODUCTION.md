@@ -15,6 +15,11 @@ Production Readiness Notes
   - Env vars (generic names preferred): `ACCOUNT_SID`, `AUTH_TOKEN`, `PHONE_NUMBER`
   - Legacy names still supported: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
 
+- Server-initiated transfers (optional)
+  - To enable WhatsApp-initiated transfers without storing any private keys, set `PRIVATE_KEY` via environment only.
+  - Users must approve allowance to the operator (server) before `transferFrom` can succeed.
+  - No private keys are ever stored in the database; only the in-memory signer from `PRIVATE_KEY` is used at runtime.
+
 - Blockchain deployment
   - Default token deployer runs in safe mock mode unless `ENABLE_ONCHAIN_DEPLOY=true` and env is complete.
   - Real on-chain deploy uses `artifacts/contracts/TokenFactory.sol/TokenFactory.json` at `FACTORY_ADDRESS`.
