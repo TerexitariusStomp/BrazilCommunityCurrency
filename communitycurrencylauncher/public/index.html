@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<script>(function(){try{document.documentElement.classList.add("dark");}catch(_){}})();</script>
+<meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Moeda Maker</title>
+  <script>
+    // Enable class-based dark mode for Tailwind CDN
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <link rel="stylesheet" href="assets/tailwind.css" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script>
+    (function(){
+      try {
+        var R = window.React;
+        if (!R || R.__patchedCreateElement) return;
+        var orig = R.createElement;
+        function coerceChild(c){
+          if (c == null) return c;
+          if (Array.isArray(c)) return c.map(coerceChild);
+          if (R.isValidElement && R.isValidElement(c)) return c;
+          var t = typeof c;
+          if (t === 'object') {
+            if (c && typeof c.message === 'string') return c.message;
+            try { return JSON.stringify(c); } catch(_) { return String(c); }
+          }
+          return c;
+        }
+        R.createElement = function(type, props){
+          var args = Array.prototype.slice.call(arguments);
+          for (var i = 2; i < args.length; i++) args[i] = coerceChild(args[i]);
+          return orig.apply(R, args);
+        };
+        R.__patchedCreateElement = true;
+      } catch (_) {}
+    })();
+  </script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
+  <!-- Safe (Gnosis) Apps SDK & Provider UMD builds -->
+  <script src="https://unpkg.com/@safe-global/safe-apps-sdk@9.1.0/dist/safe-apps-sdk.umd.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@safe-global/safe-apps-provider@0.17.1/dist/safe-apps-provider.umd.min.js" crossorigin="anonymous"></script>
+  <!-- Optional WalletConnect provider for Rainbow/mobile wallets -->
+  <!-- WalletConnect provider (local copy, pinned version) -->
+  <script src="vendor/walletconnect-ethereum-provider/index.umd.js"></script>
+  <script>
+    // Bridge UMD namespace to a simpler global for easier detection
+    (function(){
+      var ns = window['@walletconnect/ethereum-provider'];
+      if (ns && !window.WalletConnectEthereumProvider) {
+        var E = ns.EthereumProvider || ns.default || ns;
+        if (E) {
+          window.WalletConnectEthereumProvider = E;
+        }
+      }
+      // Expose Safe Apps SDK/Provider globals in a predictable way
+      if (!window.SafeAppsSDK && window.safeAppsSDK) {
+        window.SafeAppsSDK = window.safeAppsSDK;
+      }
+      if (!window.SafeAppsProvider && window.safeAppsProvider) {
+        window.SafeAppsProvider = window.safeAppsProvider;
+      }
+    })();
+  </script>
+  <!-- Optional env overrides for static hosting: create public/env.js from env.example.js -->
+  <script src="env.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+  </style>
+  <link rel="stylesheet" href="assets/dark-overrides.css" />`n</head>
+
+  <script>(function(){function showError(m){try{var el=document.getElementById('fatal-error');if(!el){el=document.createElement('div');el.id='fatal-error';el.style.cssText='position:fixed;z-index:2147483647;top:0;left:0;right:0;background:#fee;border-bottom:1px solid #fca5a5;color:#7f1d1d;padding:8px 12px;font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;';document.body.appendChild(el);}el.textContent='Error: '+m;}catch(_){}}window.addEventListener('error',function(e){var m=(e.error&&e.error.message)||e.message||'Unknown';showError(m);});})();</script>
+
+  <div id="root"></div>
+
+  <script>
+    (function () {
+      try {
+        var base = window.API_BASE || (location && location.origin ? location.origin : '');
+        if (base && typeof axios !== 'undefined') {
+          axios.defaults.baseURL = base;
+        }
+        // Detect Safe App context early and attach provider for EIP-1193 compatibility
+        (async function initSafe() {
+          try {
+            if (!window.SafeAppsSDK) return;
+            const sdk = new window.SafeAppsSDK();
+            // If not in Safe, getInfo will throw
+            const info = await sdk.safe.getInfo();
+            window.IS_SAFE_APP = true;
+            window.SAFE_INFO = info;
+            // Attach Safe provider to window.ethereum so generic flows work
+            if (window.SafeAppsProvider) {
+              const safeProvider = new window.SafeAppsProvider(sdk);
+              window.ethereum = safeProvider;
+            }
+            // Optionally broadcast an event so UI can react
+            window.dispatchEvent(new CustomEvent('safe:ready', { detail: info }));
+          } catch (_) {
+            window.IS_SAFE_APP = false;
+          }
+        })();
+      } catch (e) {}
+    })();
+  </script>
+
+  <!-- Side menu: Dashboard, 🚀 Make Moeda, 🏦 Bank Connect -->
+    <script src="assets/app.js" defer></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

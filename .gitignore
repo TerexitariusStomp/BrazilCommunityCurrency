@@ -1,24 +1,86 @@
-# Dependencies
-node_modules/
+# General
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
 
-# Hardhat artifacts
-artifacts/
-cache/
-
-# Environment
+# Environments
 .env
-.env.local
+*.env
+*.env.local
+!.env.example
+backend/.env
+frontend/.env
 
 # Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# OS
-.DS_Store
-Thumbs.db
+# Node
+node_modules/
+**/node_modules/
 
-# Misc
+# Build artifacts
 dist/
 build/
-deployments/contracts.json.bak
+out/
+coverage/
+.cache/
+.next/
+
+# Expo / React Native
+.expo/
+.expo-shared/
+**/.gradle/
+**/.cxx/
+android/.gradle/
+android/build/
+android/app/build/
+**/build/
+**/*.apk
+**/*.aab
+
+# iOS
+ios/Pods/
+ios/build/
+DerivedData/
+*.xcworkspace
+
+# Hardhat / Solidity
+artifacts/
+cache/
+typechain/
+broadcast/
+coverage.json
+foundry.toml.cache
+
+# Nested Solidity projects
+stablecoin-evm/artifacts/
+stablecoin-evm/cache/
+stablecoin-evm/typechain/
+stablecoin-evm/out/
+stablecoin/artifacts/
+stablecoin/cache/
+stablecoin/typechain/
+stablecoin/out/
+
+# Android SDK or tools accidentally added
+**/AndroidSDK/
+**/cmdline-tools/
+
+# Local exports and temp system copies
+AliaApp-export/
+C*Temp/
+C*AndroidSDK/
+
+# Misc
+tmp/
+temp/
+tmp_head.txt
+bugreport-*.zip
+
+frontend.zip

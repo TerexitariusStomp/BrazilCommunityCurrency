@@ -1,0 +1,3 @@
+[submodule "submodules/pluggycommunitycurrency"]
+	path = submodules/pluggycommunitycurrency
+	url = https://github.com/TerexitariusStomp/BrazilCommunityCurrency.git

@@ -1,0 +1,12 @@
+# Minimal static frontend image serving /public via nginx
+FROM nginx:1.25-alpine
+
+# Copy static assets
+COPY public /usr/share/nginx/html
+
+# Healthcheck and port
+EXPOSE 80
+
+# Recommended: override env via mounted env.js at runtime
+#   docker run -p 8080:80 -v $(pwd)/public/env.js:/usr/share/nginx/html/env.js:ro frontend
+

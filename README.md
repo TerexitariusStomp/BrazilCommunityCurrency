@@ -1,431 +1,92 @@
-# Brazil Community Currency System
+# Onchain Community Currency Monorepo
 
-A production-ready blockchain-based community currency system that integrates with Brazilian banking infrastructure via Pluggy API. This system enables communities to create and manage their own digital currencies backed by real bank accounts.
-
-## 🌟 Features
-
-- **Bank-Backed Tokens**: Digital currencies fully backed by real Brazilian bank accounts
-- **Pluggy Integration**: Secure connection to Brazilian banking systems
-- **Smart Contracts**: Solidity-based token contracts on blockchain
-- **Real-time Balance Updates**: Automatic synchronization with bank balances
-- **WhatsApp Integration**: Community communication and notifications
-- **Web Interface**: React-based token launcher and management
-- **Production Ready**: Comprehensive error handling and validation
-
-## 🏗️ Architecture
-
-### Smart Contracts
-- **BankOracle**: Manages bank account balances and token backing
-- **BankBackedToken**: ERC-20 compliant tokens backed by bank deposits
-- **TokenFactory**: Creates and deploys new community tokens
-- **FiatTokenV2**: Integration with Circle's USDC stablecoin
-
-### Backend Services
-- **Pluggy Service**: Handles bank API integration and webhooks
-- **Token Deployer**: Automates smart contract deployment
-- **WhatsApp Service**: Community notifications and interactions
-- **Express Server**: REST API and webhook handling
-
-### Frontend
-- **Token Launcher**: Web interface for creating new community currencies
-- **React Components**: Modern, responsive user interface
-
-#### Safe Multisig & Rainbow
-- The header includes a wallet connector that supports Rainbow/mobile via WalletConnect and browser wallets.
-- If the app runs inside a Safe App, it auto-detects the Safe via Safe Apps SDK and prefills the deploy roles with the Safe address. It also shows threshold/owners when available.
-- The Deploy form includes a Multisig Setup area to add signer addresses (owners) and a threshold. It encourages at least a 2-of-3 configuration.
-- When not inside a Safe, connect your multisig (Safe) or paste your Safe address into Owner/Minter/Pauser/Blacklister so your multisig controls the token.
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 18+
-- npm or yarn
-- Hardhat
-- GitHub CLI (gh)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/TerexitariusStomp/BrazilCommunityCurrency.git
-   cd BrazilCommunityCurrency
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your production values
-   ```
-
-4. **Compile contracts**
-   ```bash
-   npm run compile
-   ```
-
-5. **Run tests**
-   ```bash
-   npm test
-   ```
-
-6. **Deploy contracts**
-   ```bash
-   npm run deploy
-   ```
-
-7. **Start the application**
-   ```bash
-   npm start
-   ```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```env
-# Production Environment
-NODE_ENV=production
-BASE_URL=https://your-production-domain.com
-
-# Pluggy API Configuration
-PLUGGY_CLIENT_ID=your_production_pluggy_client_id
-PLUGGY_CLIENT_SECRET=your_production_pluggy_client_secret
-PLUGGY_WEBHOOK_SECRET=your_production_webhook_secret
-
-# Blockchain Configuration
-RPC_ENDPOINT=https://rpc.ankr.com/celo
-PRIVATE_KEY=your_production_private_key
-ORACLE_UPDATE_KEY=your_production_oracle_update_key
-
-# Deployed Contract Addresses
-ORACLE_ADDRESS=your_deployed_oracle_address
-FACTORY_ADDRESS=your_deployed_factory_address
-
-# WhatsApp Configuration
-WHATSAPP_API_URL=https://api.whatsapp.com/v1
-WHATSAPP_API_KEY=your_production_whatsapp_api_key
-
-# Database Configuration
-DATABASE_URL=postgresql://user:password@your-production-db:5432/community_token
-REDIS_URL=redis://your-production-redis:6379
-
-# Server Configuration
-PORT=3000
+```mermaid
+flowchart LR
+  A[Community Participants];
+  B[(CANA Token)];
+  Chain[Blockchain];
+  C[Public Auditing];
+  D[Bank Reserves BRL];
+  E[Wallets];
+  A --> B;
+  B --> Chain;
+  B --> C;
+  B --> D;
+  E -. "hold/use" .-> B;
 ```
 
-### Wallet Connection (Rainbow / Multisig)
+(A) Community participants mint/redeem (B) Caiana tokens backed by BRL reserves held at (D) the bank. Activity is recorded on the blockchain and can be inspected (C) for transparency. Users hold and use tokens in (E) wallets.
 
-- The web UI header includes a wallet connect control to help users connect via Rainbow (mobile) using WalletConnect or via a browser wallet.
-- To enable Rainbow/mobile connection, set a WalletConnect project id in the browser before loading the page:
-  - Open the browser console and run: `window.WC_PROJECT_ID = 'your_walletconnect_project_id'` then refresh.
-  - Click “Connect Rainbow / Mobile” to pair with Rainbow or any WalletConnect-compatible wallet.
-- Important: Deployments should be controlled by your multisig (e.g., Safe). If you connect an EOA by mistake, paste your multisig address into the Owner/Master Minter/Pauser/Blacklister fields so the multisig retains control.
-- The UI auto-fills these roles with the connected address and shows a small “Multisig/Contract” badge when the connected account looks like a contract (such as a Safe).
-
-## 📋 API Endpoints
-
-### Token Management
-- `POST /api/tokens/create` - Create new community token
-- `GET /api/tokens/:address` - Get token information
-- `POST /api/tokens/:address/mint` - Mint tokens (requires backing)
-
-### Bank Integration
-- `POST /api/bank/connect/:tokenAddress` - Initiate bank connection
-- `POST /api/webhooks/pluggy` - Handle Pluggy webhooks
-
-### WhatsApp Integration
-- `POST /twilio/whatsapp` - Twilio WhatsApp webhook (use this with Twilio)
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run specific test file
-npx hardhat test test/BankBackedToken.test.js
-
-# Run tests with coverage
-npx hardhat coverage
+```mermaid
+flowchart LR
+  A[Wallet A Sender];
+  B[Wallet B Recipient];
+  C[WhatsApp and CANA];
+  Chain[Blockchain];
+  A --> Chain;
+  Chain --> B;
+  C --> Chain;
 ```
 
-## 🚢 Deployment
+- A: Sender wallet
+- B: Recipient wallet
+- C: WhatsApp interface and on-chain token actions via the backend
+- Blockchain: records token transfers between wallets
 
-### Smart Contracts
-```bash
-# Deploy to Celo testnet
-npx hardhat run scripts/deploy.js --network celo
+This repository contains the code and configuration for Caiana — a community currency system built on Celo — and supporting tooling to launch, operate, and document a bank‑backed, on‑chain local currency.
 
-# Deploy to mainnet
-npx hardhat run scripts/deploy.js --network celo-mainnet
-```
+## What’s Inside
 
-### Application (API + Frontend via Express)
-```bash
-# Build for production
-npm run build
+- `frontend/` — Web UI for interacting with the system (if present in your checkout).
+- `backend/` — Lightweight backend (Node/Express) with endpoints for auth, admin config, and on-chain utilities.
+- `stablecoin/` — Caiana (CANA) stablecoin contracts and tooling (based on Circle’s stablecoin-evm framework). Includes Hardhat/Foundry config, deployment scripts, and docs.
+- `communitycurrencylauncher/` — A launcher app to create and manage community currencies, including contracts, backend helpers, and a static frontend.
 
-# Start production server
-npm run start
-```
+## Public Links
 
-### Frontend-only (Static Hosting)
+- Caiana public statement and on‑chain activity (Blockscout):
+  https://celo.blockscout.com/address/0x15ffACd88539aFa123AD4707e28f6Bc3A7DBBad7?tab=txs
+- Community Currency Launcher (live):
+  https://brazil-community-currency.vercel.app/
 
-You can deploy just the `public/` frontend to any static host (Netlify, Vercel static, GitHub Pages, S3, etc.). The UI calls the API configured via a global `window.API_BASE`.
+## Transparency
 
-1) Configure frontend env for static hosting
+The amount of Caiana (CANA) minted corresponds to BRL reserves and is evidenced publicly via the Blockscout link above. See `stablecoin/README.md` for details.
 
-```bash
-cp public/env.example.js public/env.js
-# Edit public/env.js and set:
-#   window.API_BASE = 'https://your-api.domain';
-#   window.WC_PROJECT_ID = 'your_walletconnect_project_id';
-```
+## Production UX
 
-2) Deploy the `public/` folder using your provider’s instructions, or use Docker + NGINX:
+In a production setting, people would transact on Web3 with the community currency via WhatsApp or the community’s already established application. The blockchain/Web3 layer is abstracted behind the scenes, so users can send and receive value without needing to know it is Web3.
 
-```bash
-# Build static image
-docker build -f Dockerfile.frontend -t community-frontend .
+## Future Improvements
 
-# Run locally on :8080
-docker run --rm -p 8080:80 \
-  -v "$PWD/public/env.js:/usr/share/nginx/html/env.js:ro" \
-  community-frontend
-```
+- Paymaster (Pimlico on Celo) for sponsored, free end-user transactions.
+- Public transparency portal: an easy-to-read web frontend for the general public showing live BRL reserves, circulating CANA supply, and recent changes (with charts), sourced from bank attestations and on-chain data.
+  - Example: https://bancodacidade.com/transparencia-banco-de-aracoiaba/ — a model that would be great to update dynamically with live data.
+- Geofenced boundaries that only allow transactions within the community’s defined area.
+- Holder cap: at most 10,000 wallet addresses can hold the community currency.
+- Governance interfaces, potentially coordinated through WhatsApp.
+- NFT-linked compliance docs: Publish and reference required CADSOL/DCSOL/MTE-Senaes documentation via an NFT bound to the community currency, enabling public, tamper-evident verification of regulatory materials and versioning.
 
-## GitHub Pages
+### Regulatory Context (Brazil, 2025)
 
-- This repo is configured to deploy the frontend in `public/` to GitHub Pages via a workflow at `.github/workflows/pages.yml`.
-- On push to `main` or `master`, the workflow publishes `public/` as a static site. GitHub Pages should be set to “GitHub Actions” as the source.
-- Before publishing, set your API endpoint and WalletConnect project id in `public/env.js` (see `public/env.example.js`). If `window.API_BASE` is left blank, the app will default to same-origin, which is typically not where your API runs when hosted on Pages.
-- If you use a custom domain, add your `CNAME` file to `public/` so it is included in the deployed site.
+In 2025, under PL 4476/2023 and the CADSOL framework, any organization issuing or managing a community currency (Moeda Social) in Brazil must register as a solidarity economy enterprise through CADSOL, providing founding and governance documents, member lists, and proof of community activity. After receiving the DCSOL certificate, it must obtain MTE/Senaes authorization, submitting its statute, proof of Real-backed reserves (1:1 parity), a territorial and transparency plan, and technology compliance (for blockchain/DLT systems). Renewal every two years and periodic audits ensure reserve integrity and ongoing community participation within Brazil’s solidarity economy system.
 
-## System Architecture
+Planned enhancement: identify and attest these documents on-chain through an NFT linked to the community currency for public discoverability and proof of provenance.
 
-### Five-Layer Design
+## Development Overview
 
-- Reserve Bank Account — Brazilian bank holding BRL reserves
-- Pluggy SDK — Fetches real-time balance via Open Finance API
-- Custom Oracle — Node.js service that reads Pluggy and writes to blockchain
-- Smart Contract — Stores reserve balance, mints/burns tokens
-- User Interface — PIX deposits, redemptions, reserve dashboard
+- Prereqs typically include Node.js (LTS), pnpm/yarn/npm, and for contracts Hardhat/Foundry. See subproject READMEs for exact versions and steps.
+- Common workflows:
+  - Frontend: install, build, and run dev server.
+  - Backend: provide `.env` (see examples), then run with Node.
+  - Contracts: build/test with Foundry or Hardhat; deploy via provided scripts.
 
-```
-Reserve Bank → Pluggy API → Custom Oracle → Blockchain Contract
-```
+## Security and Secrets
 
-### Minting Flow: BRL → Stablecoin
+- Do not commit private keys or secrets. Environment files are ignored by `.gitignore` and examples are provided as `.env.example` where applicable.
+- If rotating or revoking credentials, update deployment configs and relevant services.
 
-#### Step 1: User Deposits BRL via PIX
+## Repository Structure Notes
 
-- User sends PIX to reserve account with wallet in memo: `MINT-0x1234...`
-- PIX settles instantly (Brazil's real-time payment system)
-
-#### Step 2: Pluggy Detects Deposit
-
-```javascript
-const accounts = await pluggy.fetchAccounts(itemId);
-const balance = accounts[0].balance; // Updated BRL balance
-```
-
-- Pluggy webhook fires on new transaction
-- Backend fetches updated balance using `fetchAccounts()`
-- Extracts wallet address from transaction memo
-
-#### Step 3: Oracle Updates Reserve On-Chain
-
-```javascript
-const balanceWei = ethers.parseEther(balanceBRL.toString());
-await contract.updateReserveBalance(balanceWei);
-```
-
-- Oracle reads new balance from Pluggy
-- Converts to Wei (18 decimals)
-- Submits signed transaction to smart contract
-- Contract stores updated `reserveBalance` state variable
-
-#### Step 4: Automated Minting
-
-```text
-function mint(address to, uint256 amount) external {
-    require(reserveBalance >= totalSupply() + amount);
-    _mint(to, amount);
-}
-```
-
-- Backend calls `mint()` with user's address and amount
-- Contract verifies: reserves ≥ supply + new tokens
-- Mints tokens to user's wallet
-
-### Burning Flow: Stablecoin → BRL
-
-#### Step 1: User Requests Redemption
-
-```text
-function requestRedemption(uint256 amount, string pixKey) {
-    _transfer(msg.sender, address(this), amount); // Lock tokens
-    redemptions[id] = RedemptionRequest({...});
-}
-```
-
-- User calls `requestRedemption()` with amount and PIX key
-- Tokens transferred to contract (locked, not burned yet)
-
-#### Step 2: Backend Processes Request
-
-- Oracle monitors `RedemptionRequested` events
-- Validates redemption is legitimate
-
-#### Step 3: PIX Payment Sent
-
-```javascript
-// Via Pluggy Payment Initiation API
-await pluggy.initiatePayment({
-    accountId: reserveAccountId,
-    recipient: pixKey,
-    amount: redemptionAmount
-});
-```
-
-- Oracle uses Pluggy Payment Initiation to send BRL
-- User receives funds instantly via PIX
-
-#### Step 4: Token Burning
-
-```text
-function processRedemption(uint256 requestId) external {
-    _burn(address(this), redemptions[requestId].amount);
-}
-```
-
-- After PIX confirmation, oracle calls `processRedemption()`
-- Tokens permanently destroyed
-- Oracle updates reserve balance on-chain
-
-### Key Code Components
-
-#### Custom Oracle Service (Node.js + ethers.js)
-
-```javascript
-class BRLStablecoinOracle {
-  async updateReserveBalance() {
-    // 1. Fetch from Pluggy
-    const balance = await this.pluggy.getBalance();
-    
-    // 2. Submit to blockchain
-    const tx = await this.contract.updateReserveBalance(
-      ethers.parseEther(balance.toString())
-    );
-    await tx.wait();
-  }
-  
-  start(intervalSeconds = 60) {
-    setInterval(() => this.updateReserveBalance(), intervalSeconds * 1000);
-    setInterval(() => this.processMintRequests(), 30 * 1000);
-    setInterval(() => this.processRedemptions(), 30 * 1000);
-  }
-}
-```
-
-#### Smart Contract (Solidity)
-
-```text
-contract BRLStablecoin is ERC20, AccessControl {
-    uint256 public reserveBalance;
-    uint256 public lastReserveUpdate;
-    
-    function updateReserveBalance(uint256 newBalance) 
-        external onlyRole(ORACLE_ROLE) 
-    {
-        reserveBalance = newBalance;
-        lastReserveUpdate = block.timestamp;
-    }
-    
-    function checkCollateralization(uint256 additionalSupply) 
-        public view returns (bool) 
-    {
-        require(block.timestamp - lastReserveUpdate <= 1 hours);
-        return reserveBalance >= totalSupply() + additionalSupply;
-    }
-}
-```
-
-#### Pluggy Integration
-
-```javascript
-import { PluggyClient } from 'pluggy-sdk';
-
-const pluggy = new PluggyClient({
-  clientId: process.env.PLUGGY_CLIENT_ID,
-  clientSecret: process.env.PLUGGY_CLIENT_SECRET
-});
-
-// Fetch balance
-const accounts = await pluggy.fetchAccounts(itemId);
-const balance = accounts[0].balance; // BRL amount
-
-// Monitor deposits
-const txs = await pluggy.fetchTransactions(itemId, accountId, {
-  from: new Date(Date.now() - 5 * 60 * 1000)
-});
-```
-
-### Advantages of Custom Oracle vs Chainlink
-
-
-## Twilio for WhatsApp
-
-Use Twilio’s WhatsApp channel to drive the existing WhatsApp conversational flow.
-
-- Configure env: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` (E.164, e.g., +14155552671)
-- Point your Twilio WhatsApp sandbox/number webhook to `POST https://<your-domain>/twilio/whatsapp`
-- Inbound messages are processed by the WhatsApp menu engine and replied via TwiML.
-- Outbound messages (e.g., auth link) use Twilio.
-
-For Netlify/Vercel:
-- Publish directory: `public`
-- Add/serve `public/env.js` with the correct `window.API_BASE` pointing at your Express API.
-
-
-## 🔒 Security
-
-- **Bank Integration**: Secure Pluggy API integration with webhook verification
-- **Smart Contracts**: OpenZeppelin battle-tested contracts
-- **Input Validation**: Comprehensive validation on all inputs
-- **Error Handling**: Graceful error handling and logging
-- **Environment Security**: Sensitive data in environment variables
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Pluggy**: Brazilian banking API integration
-- **OpenZeppelin**: Secure smart contract libraries
-- **Hardhat**: Ethereum development environment
-- **Circle**: USDC stablecoin integration
-
-## 📞 Support
-
-For support and questions:
-- Create an issue on GitHub
-- Contact the development team
-
----
-
-**Built with ❤️ for Brazilian communities**
+- Each subfolder contains its own README and scripts where applicable.
+- This repo tracks both application code (UI/API) and on‑chain components for a cohesive, auditable system.
