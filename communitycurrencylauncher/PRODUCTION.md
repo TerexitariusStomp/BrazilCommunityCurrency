@@ -19,6 +19,11 @@ Production Readiness Notes
     - After approval, sends can be initiated in chat and executed on-chain by the operator via `transferFrom`.
     - No private keys are stored; operator key is env-only, users control their wallets.
 
+- ERC-4337 Sponsorship (Pimlico)
+  - Set `PIMLICO_API_KEY` and `PRIVATE_KEY` to enable a smart account (sponsored gas) for the operator on Celo Mainnet.
+  - The approval link will point at the smart account address (spender) when available.
+  - Sponsorship policy is handled by the Pimlico paymaster; current code sponsors all transfers for tokens deployed by your `FACTORY_ADDRESS`.
+
 - Server-initiated transfers (optional)
   - To enable WhatsApp-initiated transfers without storing any private keys, set `PRIVATE_KEY` via environment only.
   - Users must approve allowance to the operator (server) before `transferFrom` can succeed.

@@ -1,6 +1,14 @@
 const EventEmitter = require('events');
 const { Pool } = require('pg');
 const { ethers } = require('ethers');
+const { parseAbi, encodeFunctionData, http } = require('viem');
+let createSmartAccountClient, createPimlicoClient, viemChains, privKeyToAccount;
+try {
+  ({ createSmartAccountClient } = require('permissionless'));
+  ({ createPimlicoClient } = require('permissionless/clients/pimlico'));
+  viemChains = require('viem/chains');
+  ({ privateKeyToAccount: privKeyToAccount } = require('viem/accounts'));
+} catch (_) {}
 const config = require('../config');
 const twilioWhatsApp = require('./twilioWhatsApp');
 let PrivyClient = null; try { ({ PrivyClient } = require('@privy-io/server-auth')); } catch (_) {}
@@ -26,6 +34,25 @@ class WhatsAppService extends EventEmitter {
         } catch (_) {
             this.operator = null;
         }
+        // ERC-4337 Smart Account (Pimlico paymaster) for sponsored gas
+        this.smartAAClient = null;
+        this.operatorAA = null; // smart account address used as spender
+        try {
+            const apiKey = process.env.PIMLICO_API_KEY;
+            if (apiKey && privKeyToAccount && createSmartAccountClient && createPimlicoClient && viemChains) {
+                const chain = viemChains.celo; // Celo mainnet
+                const pimlicoUrl = `https://api.pimlico.io/v2/${chain.id}/rpc?apikey=${apiKey}`;
+                const account = privKeyToAccount(config.privateKey);
+                const pimlicoClient = createPimlicoClient({ chain, transport: http(pimlicoUrl) });
+                this.smartAAClient = createSmartAccountClient({ account, chain, bundlerTransport: http(pimlicoUrl), paymaster: pimlicoClient });
+                this.operatorAA = this.smartAAClient.account && this.smartAAClient.account.address;
+            }
+        } catch (_) {
+            this.smartAAClient = null;
+            this.operatorAA = null;
+        }
+        // Cache for factory tokens
+        this.factoryTokenCache = new Map();
         // No private key storage: do not persist or derive secrets server-side.
         // Any signing keys must be provided via process.env and never written to DB.
         // Initialize Privy server client (for user + wallet lifecycle, no keys handled here)
@@ -230,9 +257,41 @@ Digite o número da opção desejada`;
     }
 
     buildApproveLink(tokenAddress) {
-        if (!this.operator) return this.buildLink('');
-        const opAddr = this.operator.address;
+        const opAddr = this.operatorAA || (this.operator && this.operator.address) || '';
         return this.buildLink('approve-operator.html', { token: tokenAddress || '', operator: opAddr });
+    }
+
+    async tokenIsFromFactory(tokenAddress) {
+        if (!tokenAddress) return false;
+        const key = tokenAddress.toLowerCase();
+        if (this.factoryTokenCache.has(key)) return this.factoryTokenCache.get(key);
+        const factoryAddr = config.factoryAddress;
+        if (!factoryAddr || !this.provider) { this.factoryTokenCache.set(key, true); return true; }
+        try {
+            const abi = [ 'function deployments(uint256) view returns (address tokenAddress, string name, string symbol, address deployer, uint256 deployedAt)' ];
+            const f = new ethers.Contract(factoryAddr, abi, this.provider);
+            // Probe size exponentially
+            let lo = -1, hi = 1; const HARD_CAP = 50000;
+            try { await f.deployments(0); } catch (e) { this.factoryTokenCache.set(key, false); return false; }
+            lo = 0;
+            while (true) {
+                if (hi > HARD_CAP) { hi = HARD_CAP; break; }
+                try { await f.deployments(hi); lo = hi; hi = hi * 2; } catch (e) { break; }
+            }
+            let L = lo, R = hi;
+            while (L + 1 < R) {
+                const mid = (L + R) >> 1;
+                try { await f.deployments(mid); L = mid; } catch (e) { R = mid; }
+            }
+            // Scan all (0..L) to check membership
+            for (let i = 0; i <= L; i++) {
+                const d = await f.deployments(i);
+                if (String(d.tokenAddress || '').toLowerCase() === key) { this.factoryTokenCache.set(key, true); return true; }
+            }
+            this.factoryTokenCache.set(key, false); return false;
+        } catch (_) {
+            this.factoryTokenCache.set(key, false); return false;
+        }
     }
 
     async initiatePrivyAuth(phoneNumber) {
@@ -366,25 +425,47 @@ Digite o número da opção desejada`;
 
         if (!fromWallet) throw new Error('Remetente não cadastrado');
 
-        if (!tokenAddress || !this.tokenAbi || !this.provider || !this.operator) {
-            // Chain context unavailable; simulate success for UX flow
+        if (!tokenAddress || !this.tokenAbi || !this.provider) {
             return { txHash: `0x${Math.random().toString(16).slice(2, 66)}` };
         }
 
-        const token = new ethers.Contract(tokenAddress, this.tokenAbi, this.operator);
+        // Resolve token metadata
+        const token = new ethers.Contract(tokenAddress, this.tokenAbi, this.provider);
         const [decimals, symbol] = await Promise.all([
           token.decimals().catch(()=>18),
           token.symbol?.().catch(()=>"TOKEN")
         ]);
         const amt = ethers.parseUnits(String(amount), decimals);
-        // Determine recipient: linked wallet or counterfactual address derived from phone number
         const target = (toWallet && toWallet.address) ? toWallet.address : this.deriveCounterfactualAddress(toPhone);
-        // Require balance and allowance now
-        const bal = await token.balanceOf(fromWallet.address);
+
+        // If smart account client is available and token is from our factory, use AA + paymaster sponsorship
+        if (this.smartAAClient && this.operatorAA && await this.tokenIsFromFactory(tokenAddress)) {
+            // Check balance and allowance from view provider
+            const bal = await token.balanceOf(fromWallet.address);
+            if (bal < amt) throw new Error('Saldo insuficiente do token');
+            const allowance = await token.allowance(fromWallet.address, this.operatorAA);
+            if (allowance < amt) throw new Error('Permissão insuficiente');
+            const erc20Abi = parseAbi(['function transferFrom(address from, address to, uint256 value)']);
+            const data = encodeFunctionData({ abi: erc20Abi, functionName: 'transferFrom', args: [fromWallet.address, target, BigInt(amt.toString())] });
+            const hash = await this.smartAAClient.sendTransaction({ to: tokenAddress, data, value: 0n });
+            // Success notification to recipient via WhatsApp (best-effort)
+            try {
+              if (twilioWhatsApp.isConfigured()) {
+                const human = Number(amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                await twilioWhatsApp.sendWhatsApp(toPhone, `Você recebeu ${human} ${symbol} de ${fromPhone}. Hash: ${hash}`);
+              }
+            } catch (_) {}
+            return { txHash: hash };
+        }
+
+        // Fallback to EOA operator (pays own gas)
+        if (!this.operator) throw new Error('Operador indisponível');
+        const opToken = new ethers.Contract(tokenAddress, this.tokenAbi, this.operator);
+        const bal = await opToken.balanceOf(fromWallet.address);
         if (bal < amt) throw new Error('Saldo insuficiente do token');
-        const allowance = await token.allowance(fromWallet.address, this.operator.address);
+        const allowance = await opToken.allowance(fromWallet.address, this.operator.address);
         if (allowance < amt) throw new Error('Permissão insuficiente');
-        const tx = await token.transferFrom(fromWallet.address, target, amt);
+        const tx = await opToken.transferFrom(fromWallet.address, target, amt);
         const receipt = await tx.wait();
         // Success notification to recipient via WhatsApp (best-effort)
         try {
