@@ -35,6 +35,70 @@ flowchart LR
 
 This repository contains the code and configuration for Caiana — a community currency system built on Celo — and supporting tooling to launch, operate, and document a bank‑backed, on‑chain local currency.
 
+**Tech Stack Flow**
+- Entry points
+  - WhatsApp webhook → `communitycurrencylauncher/api/twilio/whatsapp.js` (Vercel Function)
+  - Static frontend (approval + ops) → `communitycurrencylauncher/public/*` served by Vercel
+- Chat orchestration
+  - Core logic → `communitycurrencylauncher/services/whatsappService.js`
+  - Stores only non‑sensitive data (sessions, phone→public address mapping) via `DATABASE_URL`; never stores private keys
+- Wallets and custody
+  - Self‑custodial users link a wallet; no keys are stored server‑side
+  - One‑time allowance approval: user approves an operator address once per token in‑app
+    - Page → `communitycurrencylauncher/public/approve-operator.html`
+    - Finds token by name/symbol (scans factory deployments) or accepts direct address
+- Sponsored sending (ERC‑4337)
+  - Operator uses a Smart Account (AA) with Pimlico bundler + paymaster on Celo mainnet for gas sponsorship
+  - If available, AA address is used as spender; otherwise, fallback to EOA operator (env‑only `PRIVATE_KEY`)
+  - Only tokens deployed by your `FACTORY_ADDRESS` are sponsored
+- Bank linkage and auto‑mint
+  - Pluggy integration → `communitycurrencylauncher/services/pluggyService.js`
+  - Connect bank (`/api/connect-bank/:tokenAddress`), link PIX keys, and auto‑mint on inbound deposits
+  - Per‑token oracle updates backing balances on‑chain
+- Contracts
+  - TokenFactory deploys BankBackedToken + per‑token BankOracle → `communitycurrencylauncher/contracts/*.sol`
+  - Extended factory flow can pre‑authorize oracle updaters and link initial accounts
+- API surface (Vercel Functions under `communitycurrencylauncher/api/`)
+  - `health.js` — liveness
+  - `deploy-token.js` — deploy a new community token (via factory)
+  - `connect-bank/[tokenAddress].js` — start Pluggy Connect for a token
+  - `pix/link.js` — link PIX key → wallet for auto‑mint
+  - `tokens/[address]/redeem.js` — redemption flow hook
+  - `whatsapp/*` — link/register via chat helpers
+  - `webhooks/pluggy.js` — receive Pluggy updates
+
+**End‑To‑End Flows**
+- Onboarding
+  - User messages WhatsApp → webhook validates Twilio → hands to `whatsappService`
+  - User links wallet (public address only) → receives one‑time approval link
+  - Approve page uses ethers/WalletConnect to approve operator/AA for a chosen token
+- Send (after approval)
+  - User types “send 10 …” in chat; service checks balance/allowance
+  - If token is from factory and AA is active, submits sponsored transferFrom via Pimlico; else uses EOA operator
+  - Recipient receives WhatsApp confirmation with tx hash
+- Bank connect and auto‑mint
+  - Admin deploys token (factory creates per‑token oracle)
+  - Bank connection via Pluggy → oracle linked → balances updated → auto‑mint path transfers backed tokens
+- Redemption
+  - User transfers tokens to redemption wallet (admin) → backend pays PIX and burns tokens via oracle rules
+
+**Environments & Secrets**
+- Vercel Project → Environment Variables (no `.env` stored in repo)
+- Required (examples)
+  - WhatsApp: `ACCOUNT_SID`, `AUTH_TOKEN`, `PHONE_NUMBER`
+  - Blockchain: `RPC_ENDPOINT` (Celo), `FACTORY_ADDRESS`, `PRIVATE_KEY`
+  - Pimlico AA: `PIMLICO_API_KEY` (bundler + paymaster sponsorship)
+  - Pluggy: `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`
+  - Database: `DATABASE_URL` (Postgres; non‑sensitive state only)
+- Frontend public config → `communitycurrencylauncher/public/env.js`
+  - `window.CELO_FACTORY_ADDRESS`, `window.WC_PROJECT_ID`, optional explorer links
+
+**Security Model**
+- No private keys persisted in the database or repo
+- Operator key (EOA) and AA signer loaded only from environment
+- Sponsored sends limited to tokens deployed by your factory address
+- Users can revoke allowance anytime at the token contract
+
 ## What’s Inside
 
 - `frontend/` — Web UI for interacting with the system (if present in your checkout).
